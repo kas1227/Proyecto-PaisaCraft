@@ -1,6 +1,6 @@
 -- ============================================================
 -- PAISACRAFT
--- MOVIMIENTO DE LA TURTLE v6.1.1
+-- MOVIMIENTO DE LA TURTLE v6.1.5
 -- ============================================================
 
 local config =
@@ -24,7 +24,9 @@ function movement.getFuelLevel()
         turtle.getFuelLevel()
 
     if fuel == "unlimited" then
+
         return math.huge
+
     end
 
     return fuel
@@ -34,13 +36,16 @@ end
 -- ============================================================
 -- COMBUSTIBLE DE EMERGENCIA
 --
--- Slot 16 NUNCA se utiliza.
+-- Solo utiliza slots 1-15.
+-- Slot 16 queda reservado para bloques retirados.
 -- ============================================================
 
 function movement.tryInventoryFuel()
 
     if movement.getFuelLevel() > 0 then
+
         return true
+
     end
 
     for slot =
@@ -48,7 +53,11 @@ function movement.tryInventoryFuel()
         config.BUILD_SLOT_LAST
     do
 
-        if turtle.getItemCount(slot) > 0 then
+        if
+            turtle.getItemCount(slot)
+            >
+            0
+        then
 
             turtle.select(slot)
 
@@ -60,6 +69,8 @@ function movement.tryInventoryFuel()
                         "Fuel emergencia:",
                         movement.getFuelLevel()
                     )
+
+                    state.clearBuildingSlot()
 
                     return true
 
@@ -76,13 +87,15 @@ function movement.tryInventoryFuel()
 end
 
 -- ============================================================
--- ASEGURAR FUEL
+-- ASEGURAR COMBUSTIBLE
 -- ============================================================
 
 function movement.ensureFuel()
 
     if movement.getFuelLevel() > 0 then
+
         return true
+
     end
 
     return movement.tryInventoryFuel()
@@ -90,31 +103,38 @@ function movement.ensureFuel()
 end
 
 -- ============================================================
--- GPS PERIÓDICO
+-- GPS PERIODICO
 -- ============================================================
 
 local function periodicGPS()
 
     if not state.needsGPSSync() then
+
         return true
+
     end
 
-    local ok, err =
+    local ok,
+        err =
         gpslib.periodicSync()
 
     if not ok then
 
         return false,
-            err or "GPS_SYNC_FAILED"
+            err
+            or
+            "GPS_SYNC_FAILED"
 
     end
+
+    state.resetGPSCounter()
 
     return true
 
 end
 
 -- ============================================================
--- PROCESAR MOVIMIENTO REALIZADO
+-- DESPUES DE UN MOVIMIENTO
 -- ============================================================
 
 local function afterMovement(
@@ -130,6 +150,8 @@ local function afterMovement(
             "ERROR_POSICION_INTERNA"
 
     end
+
+    state.movementPerformed()
 
     local gpsOK,
         gpsError =
@@ -185,8 +207,8 @@ function movement.forward()
     -- ========================================================
     -- POSIBLE ENTIDAD
     --
-    -- Si no detectamos un bloque pero tampoco podemos avanzar,
-    -- probablemente haya una entidad.
+    -- Si no hay bloque pero tampoco podemos avanzar,
+    -- probablemente hay una entidad.
     -- ========================================================
 
     if not turtle.detect() then
@@ -249,6 +271,10 @@ function movement.back()
 
     end
 
+    -- turtle.back() no tiene detectBack().
+    -- Si falla, simplemente consideramos
+    -- que el camino esta bloqueado.
+
     return false,
         "BLOQUEADO"
 
@@ -286,7 +312,9 @@ function movement.up()
 
     end
 
-    -- Posible entidad.
+    -- ========================================================
+    -- POSIBLE ENTIDAD
+    -- ========================================================
 
     if not turtle.detectUp() then
 
@@ -348,7 +376,9 @@ function movement.down()
 
     end
 
-    -- Posible entidad.
+    -- ========================================================
+    -- POSIBLE ENTIDAD
+    -- ========================================================
 
     if not turtle.detectDown() then
 
@@ -394,10 +424,24 @@ function movement.turnLeft()
 
     end
 
-    turtle.turnLeft()
+    local ok =
+        turtle.turnLeft()
+
+    if not ok then
+
+        return false,
+            "GIRO_FALLIDO"
+
+    end
 
     state.setDirection(
-        (direction + 3) % 4
+        (
+            direction
+            +
+            3
+        )
+        %
+        4
     )
 
     return true
@@ -420,10 +464,24 @@ function movement.turnRight()
 
     end
 
-    turtle.turnRight()
+    local ok =
+        turtle.turnRight()
+
+    if not ok then
+
+        return false,
+            "GIRO_FALLIDO"
+
+    end
 
     state.setDirection(
-        (direction + 1) % 4
+        (
+            direction
+            +
+            1
+        )
+        %
+        4
     )
 
     return true
@@ -431,7 +489,7 @@ function movement.turnRight()
 end
 
 -- ============================================================
--- GIRAR HACIA DIRECCIÓN
+-- GIRAR HACIA DIRECCION
 -- ============================================================
 
 function movement.turnTo(
@@ -462,7 +520,9 @@ function movement.turnTo(
     end
 
     if difference == 0 then
+
         return true
+
     end
 
     if difference == 1 then
@@ -500,7 +560,7 @@ function movement.turnTo(
 end
 
 -- ============================================================
--- MOVER HACIA UNA DIRECCIÓN
+-- MOVER HACIA UNA DIRECCION
 -- ============================================================
 
 function movement.moveDirection(
@@ -525,18 +585,112 @@ function movement.moveDirection(
 end
 
 -- ============================================================
--- ASEGURAR ORIENTACIÓN
+-- ASEGURAR ORIENTACION
+--
+-- Tras un reboot:
+--
+-- state.direction = nil
+--
+-- Se detecta orientacion usando GPS.
 -- ============================================================
 
 function movement.ensureOrientation()
 
-    if state.getDirection() ~= nil then
+    if
+        state.getDirection()
+        ~=
+        nil
+    then
+
         return true
+
     end
 
-    return gpslib.detectOrientation(
-        movement.ensureFuel
-    )
+    local ok,
+        err =
+        gpslib.detectOrientation(
+            movement.ensureFuel
+        )
+
+    if not ok then
+
+        return false,
+            err
+            or
+            "NO_SE_PUDO_DETECTAR_ORIENTACION"
+
+    end
+
+    if
+        state.getDirection()
+        ==
+        nil
+    then
+
+        return false,
+            "ORIENTACION_SIGUE_DESCONOCIDA"
+
+    end
+
+    return true
+
+end
+
+-- ============================================================
+-- ASEGURAR POSICION Y ORIENTACION
+--
+-- Util para recuperaciones tras reboot.
+-- ============================================================
+
+function movement.ensureNavigationState()
+
+    local positionOK,
+        positionError =
+        gpslib.ensurePosition()
+
+    if not positionOK then
+
+        return false,
+            positionError
+
+    end
+
+    local orientationOK,
+        orientationError =
+        movement.ensureOrientation()
+
+    if not orientationOK then
+
+        return false,
+            orientationError
+
+    end
+
+    return true
+
+end
+
+-- ============================================================
+-- ESTADISTICAS
+-- ============================================================
+
+function movement.getStats()
+
+    return {
+
+        fuel =
+            movement.getFuelLevel(),
+
+        position =
+            state.getPosition(),
+
+        direction =
+            state.getDirection(),
+
+        gpsMovements =
+            state.movementsSinceGPS
+
+    }
 
 end
 

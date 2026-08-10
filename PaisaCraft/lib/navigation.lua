@@ -1,6 +1,6 @@
 -- ============================================================
 -- PAISACRAFT
--- NAVEGACIÓN v6.1.1
+-- NAVEGACION v6.1.5
 -- ============================================================
 
 local config =
@@ -21,12 +21,14 @@ local movement =
 local navigation = {}
 
 -- ============================================================
--- ¿ES UN BLOQUEO FÍSICO?
+-- ¿ES UN BLOQUEO FISICO?
 --
--- Solo los errores BLOQUEADO deben provocar desvíos.
+-- Solo estos errores permiten intentar rodear.
 -- ============================================================
 
-local function isPhysicalBlock(reason)
+local function isPhysicalBlock(
+    reason
+)
 
     return
         reason == "BLOQUEADO"
@@ -36,7 +38,65 @@ local function isPhysicalBlock(reason)
 end
 
 -- ============================================================
--- DESVÍO HORIZONTAL
+-- CONTROL
+-- ============================================================
+
+local function checkControl(
+    callbacks
+)
+
+    if
+        callbacks
+        and
+        callbacks.onControl
+    then
+
+        local continueNavigation =
+            callbacks.onControl()
+
+        if continueNavigation == false then
+
+            return false,
+                "INTERRUPTED"
+
+        end
+
+    end
+
+    return true
+
+end
+
+-- ============================================================
+-- SINCRONIZAR GPS
+-- ============================================================
+
+local function syncGPS()
+
+    local ok,
+        err =
+        gpslib.sync()
+
+    if not ok then
+
+        return false,
+            err
+
+    end
+
+    return true
+
+end
+
+-- ============================================================
+-- DESVIO HORIZONTAL
+--
+-- Prueba:
+--
+-- 1. derecha
+-- 2. izquierda
+--
+-- No intenta romper bloques.
 -- ============================================================
 
 function navigation.tryHorizontalDetour()
@@ -55,10 +115,19 @@ function navigation.tryHorizontalDetour()
     -- DERECHA
     -- ========================================================
 
+    local rightDirection =
+        (
+            originalDirection
+            +
+            1
+        )
+        %
+        4
+
     local turnOK,
         turnError =
         movement.turnTo(
-            (originalDirection + 1) % 4
+            rightDirection
         )
 
     if not turnOK then
@@ -76,7 +145,7 @@ function navigation.tryHorizontalDetour()
 
         local gpsOK,
             gpsError =
-            gpslib.sync()
+            syncGPS()
 
         if not gpsOK then
 
@@ -89,31 +158,59 @@ function navigation.tryHorizontalDetour()
 
     end
 
-    -- Si no es un obstáculo físico,
-    -- no tiene sentido seguir intentando desvíos.
+    -- ========================================================
+    -- ERROR NO FISICO
+    -- ========================================================
 
-    if not isPhysicalBlock(
-        rightReason
-    )
+    if
+        not isPhysicalBlock(
+            rightReason
+        )
     then
+
+        movement.turnTo(
+            originalDirection
+        )
 
         return false,
             rightReason
 
     end
 
-    movement.turnTo(
-        originalDirection
-    )
+    -- ========================================================
+    -- VOLVER A ORIENTACION ORIGINAL
+    -- ========================================================
+
+    local restoreOK,
+        restoreError =
+        movement.turnTo(
+            originalDirection
+        )
+
+    if not restoreOK then
+
+        return false,
+            restoreError
+
+    end
 
     -- ========================================================
     -- IZQUIERDA
     -- ========================================================
 
+    local leftDirection =
+        (
+            originalDirection
+            +
+            3
+        )
+        %
+        4
+
     local leftTurnOK,
         leftTurnError =
         movement.turnTo(
-            (originalDirection + 3) % 4
+            leftDirection
         )
 
     if not leftTurnOK then
@@ -131,7 +228,7 @@ function navigation.tryHorizontalDetour()
 
         local gpsOK,
             gpsError =
-            gpslib.sync()
+            syncGPS()
 
         if not gpsOK then
 
@@ -144,13 +241,18 @@ function navigation.tryHorizontalDetour()
 
     end
 
+    -- ========================================================
+    -- RESTAURAR ORIENTACION
+    -- ========================================================
+
     movement.turnTo(
         originalDirection
     )
 
-    if not isPhysicalBlock(
-        leftReason
-    )
+    if
+        not isPhysicalBlock(
+            leftReason
+        )
     then
 
         return false,
@@ -164,7 +266,16 @@ function navigation.tryHorizontalDetour()
 end
 
 -- ============================================================
--- RODEAR OBSTÁCULO
+-- RODEAR OBSTACULO
+--
+-- Orden:
+--
+-- 1. lateral
+-- 2. arriba
+-- 3. abajo
+--
+-- Tras cualquier movimiento exitoso el loop principal
+-- recalculara el camino hacia el destino.
 -- ============================================================
 
 function navigation.moveAroundObstacle()
@@ -178,12 +289,15 @@ function navigation.moveAroundObstacle()
         navigation.tryHorizontalDetour()
 
     if sideOK then
+
         return true
+
     end
 
-    if not isPhysicalBlock(
-        sideReason
-    )
+    if
+        not isPhysicalBlock(
+            sideReason
+        )
     then
 
         return false,
@@ -203,7 +317,7 @@ function navigation.moveAroundObstacle()
 
         local gpsOK,
             gpsError =
-            gpslib.sync()
+            syncGPS()
 
         if not gpsOK then
 
@@ -216,9 +330,10 @@ function navigation.moveAroundObstacle()
 
     end
 
-    if not isPhysicalBlock(
-        upReason
-    )
+    if
+        not isPhysicalBlock(
+            upReason
+        )
     then
 
         return false,
@@ -238,7 +353,7 @@ function navigation.moveAroundObstacle()
 
         local gpsOK,
             gpsError =
-            gpslib.sync()
+            syncGPS()
 
         if not gpsOK then
 
@@ -251,9 +366,10 @@ function navigation.moveAroundObstacle()
 
     end
 
-    if not isPhysicalBlock(
-        downReason
-    )
+    if
+        not isPhysicalBlock(
+            downReason
+        )
     then
 
         return false,
@@ -292,14 +408,20 @@ function navigation.moveHorizontal(
         movement.forward()
 
     if moved then
+
         return true
+
     end
 
     -- ========================================================
-    -- ERROR QUE NO ES OBSTÁCULO
+    -- ERROR NO FISICO
     -- ========================================================
 
-    if not isPhysicalBlock(reason) then
+    if
+        not isPhysicalBlock(
+            reason
+        )
+    then
 
         return false,
             reason
@@ -307,7 +429,7 @@ function navigation.moveHorizontal(
     end
 
     print(
-        "Obstáculo -> buscando desvío."
+        "Obstaculo -> buscando desvio."
     )
 
     local detourOK,
@@ -315,7 +437,9 @@ function navigation.moveHorizontal(
         navigation.moveAroundObstacle()
 
     if detourOK then
+
         return true
+
     end
 
     return false,
@@ -326,7 +450,7 @@ function navigation.moveHorizontal(
 end
 
 -- ============================================================
--- ¿ESTAMOS EN EL DESTINO?
+-- ¿ESTAMOS EN DESTINO?
 -- ============================================================
 
 function navigation.atPosition(
@@ -336,7 +460,9 @@ function navigation.atPosition(
 )
 
     if not state.hasPosition() then
+
         return false
+
     end
 
     return
@@ -349,7 +475,7 @@ function navigation.atPosition(
 end
 
 -- ============================================================
--- CONFIRMAR DESTINO
+-- CONFIRMAR DESTINO CON GPS
 -- ============================================================
 
 function navigation.confirmPosition(
@@ -358,7 +484,8 @@ function navigation.confirmPosition(
     targetZ
 )
 
-    local ok, err =
+    local ok,
+        err =
         gpslib.sync()
 
     if not ok then
@@ -387,6 +514,14 @@ end
 
 -- ============================================================
 -- PASO DIRECTO
+--
+-- Prioridad:
+--
+-- X
+-- Z
+-- Y
+--
+-- Esto mantiene el comportamiento original de PaisaCraft.
 -- ============================================================
 
 function navigation.directStep(
@@ -394,6 +529,13 @@ function navigation.directStep(
     targetY,
     targetZ
 )
+
+    if not state.hasPosition() then
+
+        return false,
+            "POSICION_DESCONOCIDA"
+
+    end
 
     local position =
         state.position
@@ -453,10 +595,23 @@ function navigation.directStep(
 end
 
 -- ============================================================
--- ESCAPE
+-- PASO DE ESCAPE
+--
+-- Se usa cuando la turtle empieza a visitar
+-- repetidamente la misma posicion.
+--
+-- Orden:
+--
+-- arriba
+-- lateral
+-- abajo
 -- ============================================================
 
 function navigation.escapeStep()
+
+    -- ========================================================
+    -- ARRIBA
+    -- ========================================================
 
     local upOK,
         upReason =
@@ -466,7 +621,7 @@ function navigation.escapeStep()
 
         local gpsOK,
             gpsError =
-            gpslib.sync()
+            syncGPS()
 
         if not gpsOK then
 
@@ -479,9 +634,10 @@ function navigation.escapeStep()
 
     end
 
-    if not isPhysicalBlock(
-        upReason
-    )
+    if
+        not isPhysicalBlock(
+            upReason
+        )
     then
 
         return false,
@@ -489,23 +645,34 @@ function navigation.escapeStep()
 
     end
 
+    -- ========================================================
+    -- LATERAL
+    -- ========================================================
+
     local sideOK,
         sideReason =
         navigation.tryHorizontalDetour()
 
     if sideOK then
+
         return true
+
     end
 
-    if not isPhysicalBlock(
-        sideReason
-    )
+    if
+        not isPhysicalBlock(
+            sideReason
+        )
     then
 
         return false,
             sideReason
 
     end
+
+    -- ========================================================
+    -- ABAJO
+    -- ========================================================
 
     local downOK,
         downReason =
@@ -515,7 +682,7 @@ function navigation.escapeStep()
 
         local gpsOK,
             gpsError =
-            gpslib.sync()
+            syncGPS()
 
         if not gpsOK then
 
@@ -525,6 +692,17 @@ function navigation.escapeStep()
         end
 
         return true
+
+    end
+
+    if
+        not isPhysicalBlock(
+            downReason
+        )
+    then
+
+        return false,
+            downReason
 
     end
 
@@ -547,64 +725,99 @@ function navigation.goTo(
 )
 
     callbacks =
-        callbacks or {}
+        callbacks
+        or
+        {}
 
     -- ========================================================
-    -- POSICIÓN
+    -- VALIDACION
     -- ========================================================
 
-    local positionOK,
-        positionError =
-        gpslib.ensurePosition()
+    if
+        type(targetX)
+        ~=
+        "number"
 
-    if not positionOK then
+        or
+
+        type(targetY)
+        ~=
+        "number"
+
+        or
+
+        type(targetZ)
+        ~=
+        "number"
+    then
 
         return false,
-            positionError
+            "DESTINO_INVALIDO"
 
     end
 
     -- ========================================================
-    -- ORIENTACIÓN
+    -- POSICION + ORIENTACION
     -- ========================================================
 
-    local orientationOK,
-        orientationError =
-        movement.ensureOrientation()
+    local navigationOK,
+        navigationError =
+        movement.ensureNavigationState()
 
-    if not orientationOK then
+    if not navigationOK then
 
         return false,
-            orientationError
+            navigationError
 
     end
 
-    local steps = 0
+    -- ========================================================
+    -- CONTADORES
+    -- ========================================================
 
-    local visited = {}
+    local steps =
+        0
+
+    local visited =
+        {}
+
+    -- ========================================================
+    -- LOOP
+    -- ========================================================
 
     while true do
 
         -- ====================================================
         -- CONTROL
+        --
+        -- Permite:
+        --
+        -- pausa
+        -- resume
+        -- return home
+        -- interrupciones
         -- ====================================================
 
-        if callbacks.onControl then
+        local controlOK,
+            controlError =
+            checkControl(
+                callbacks
+            )
 
-            local continueNavigation =
-                callbacks.onControl()
+        if not controlOK then
 
-            if continueNavigation == false then
-
-                return false,
-                    "INTERRUPTED"
-
-            end
+            return false,
+                controlError
 
         end
 
         -- ====================================================
-        -- GPS PERIÓDICO
+        -- GPS PERIODICO
+        --
+        -- movement.lua incrementa el contador.
+        --
+        -- gpslib.periodicSync() solo hace GPS
+        -- cuando realmente se alcanza el intervalo.
         -- ====================================================
 
         local gpsOK,
@@ -622,27 +835,41 @@ function navigation.goTo(
         -- DESTINO
         -- ====================================================
 
-        if navigation.atPosition(
-            targetX,
-            targetY,
-            targetZ
-        )
+        if
+            navigation.atPosition(
+                targetX,
+                targetY,
+                targetZ
+            )
         then
+
+            -- =================================================
+            -- VERIFICACION GPS REAL
+            -- =================================================
 
             local confirmed,
                 confirmError =
                 navigation.confirmPosition(
+
                     targetX,
                     targetY,
                     targetZ
+
                 )
 
             if confirmed then
+
                 return true
+
             end
 
-            -- Si GPS funciona pero simplemente había
-            -- una discrepancia, seguimos navegando.
+            -- =================================================
+            -- GPS DICE QUE NO ESTAMOS REALMENTE AHI
+            --
+            -- Como gpslib.sync() actualizo state.position,
+            -- simplemente continuamos navegando desde la
+            -- posicion real.
+            -- =================================================
 
             if
                 confirmError
@@ -658,11 +885,13 @@ function navigation.goTo(
         end
 
         -- ====================================================
-        -- LÍMITE
+        -- LIMITE DE SEGURIDAD
         -- ====================================================
 
         steps =
-            steps + 1
+            steps
+            +
+            1
 
         if
             steps
@@ -676,8 +905,15 @@ function navigation.goTo(
         end
 
         -- ====================================================
-        -- VISITAS
+        -- POSICION ACTUAL
         -- ====================================================
+
+        if not state.hasPosition() then
+
+            return false,
+                "POSICION_PERDIDA"
+
+        end
 
         local key =
             utils.positionKey(
@@ -700,8 +936,11 @@ function navigation.goTo(
         local visits =
             visited[key]
 
-        local moved = false
-        local reason = nil
+        local moved =
+            false
+
+        local reason =
+            nil
 
         -- ====================================================
         -- RUTA DIRECTA
@@ -716,15 +955,20 @@ function navigation.goTo(
             moved,
             reason =
                 navigation.directStep(
+
                     targetX,
                     targetY,
                     targetZ
+
                 )
 
         end
 
         -- ====================================================
-        -- ERROR NO FÍSICO
+        -- ERROR NO FISICO
+        --
+        -- SIN_FUEL, GPS, orientación, etc.
+        -- no deben provocar intentos de desvio.
         -- ====================================================
 
         if
@@ -732,7 +976,9 @@ function navigation.goTo(
             and
             reason
             and
-            not isPhysicalBlock(reason)
+            not isPhysicalBlock(
+                reason
+            )
         then
 
             return false,
@@ -741,7 +987,7 @@ function navigation.goTo(
         end
 
         -- ====================================================
-        -- DESVÍO
+        -- DESVIO
         -- ====================================================
 
         if not moved then
@@ -757,7 +1003,9 @@ function navigation.goTo(
             and
             reason
             and
-            not isPhysicalBlock(reason)
+            not isPhysicalBlock(
+                reason
+            )
         then
 
             return false,
@@ -766,16 +1014,25 @@ function navigation.goTo(
         end
 
         -- ====================================================
-        -- POSICIÓN REPETIDA
+        -- POSICION REPETIDA
+        --
+        -- Si hemos estado demasiadas veces en la
+        -- misma coordenada intentamos un escape.
         -- ====================================================
 
         if
             visits
             >=
             config.MAX_POSITION_VISITS
+
             and
+
             not moved
         then
+
+            print(
+                "Ruta repetida -> escape."
+            )
 
             moved,
             reason =
@@ -788,7 +1045,9 @@ function navigation.goTo(
             and
             reason
             and
-            not isPhysicalBlock(reason)
+            not isPhysicalBlock(
+                reason
+            )
         then
 
             return false,
@@ -797,7 +1056,7 @@ function navigation.goTo(
         end
 
         -- ====================================================
-        -- RUTA BLOQUEADA
+        -- RUTA COMPLETAMENTE BLOQUEADA
         -- ====================================================
 
         if not moved then
@@ -807,23 +1066,51 @@ function navigation.goTo(
             print("        RUTA BLOQUEADA")
             print("==============================")
 
+            print("")
+
             print(
                 "Actual:",
                 utils.formatPosition(
+
                     state.position.x,
                     state.position.y,
                     state.position.z
+
                 )
             )
 
             print(
                 "Destino:",
                 utils.formatPosition(
+
                     targetX,
                     targetY,
                     targetZ
+
                 )
             )
+
+            print("")
+            print(
+                "Reintentando..."
+            )
+
+            -- =================================================
+            -- CONTROL DURANTE ESPERA
+            -- =================================================
+
+            local waitControlOK,
+                waitControlError =
+                checkControl(
+                    callbacks
+                )
+
+            if not waitControlOK then
+
+                return false,
+                    waitControlError
+
+            end
 
             sleep(1)
 
@@ -834,7 +1121,7 @@ function navigation.goTo(
 end
 
 -- ============================================================
--- IR A POSITION
+-- IR A OBJETO POSITION
 -- ============================================================
 
 function navigation.goToPosition(
@@ -866,7 +1153,69 @@ function navigation.goToPosition(
 end
 
 -- ============================================================
--- DISTANCIA
+-- IR A POSITION Y RESTAURAR DIRECCION
+--
+-- Util cuando en el futuro queramos almacenar:
+--
+-- {
+--     x = ...,
+--     y = ...,
+--     z = ...,
+--     direction = ...
+-- }
+--
+-- Si direction no existe, simplemente llega a X/Y/Z.
+-- ============================================================
+
+function navigation.goToPositionAndDirection(
+    position,
+    callbacks
+)
+
+    local ok,
+        err =
+        navigation.goToPosition(
+
+            position,
+
+            callbacks
+
+        )
+
+    if not ok then
+
+        return false,
+            err
+
+    end
+
+    if
+        position.direction
+        ~=
+        nil
+    then
+
+        local turnOK,
+            turnError =
+            movement.turnTo(
+                position.direction
+            )
+
+        if not turnOK then
+
+            return false,
+                turnError
+
+        end
+
+    end
+
+    return true
+
+end
+
+-- ============================================================
+-- DISTANCIA HASTA DESTINO
 -- ============================================================
 
 function navigation.distanceTo(
@@ -876,7 +1225,9 @@ function navigation.distanceTo(
 )
 
     if not state.hasPosition() then
+
         return nil
+
     end
 
     return utils.manhattanDistance(
@@ -890,6 +1241,57 @@ function navigation.distanceTo(
         targetZ
 
     )
+
+end
+
+-- ============================================================
+-- DISTANCIA HASTA POSITION
+-- ============================================================
+
+function navigation.distanceToPosition(
+    position
+)
+
+    if
+        not utils.isValidPosition(
+            position
+        )
+    then
+
+        return nil
+
+    end
+
+    return navigation.distanceTo(
+
+        position.x,
+        position.y,
+        position.z
+
+    )
+
+end
+
+-- ============================================================
+-- ESTADISTICAS
+-- ============================================================
+
+function navigation.getStats()
+
+    return {
+
+        position =
+            state.getPosition(),
+
+        direction =
+            state.getDirection(),
+
+        directionName =
+            gpslib.directionName(
+                state.getDirection()
+            )
+
+    }
 
 end
 

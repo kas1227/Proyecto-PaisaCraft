@@ -1,6 +1,6 @@
 -- ============================================================
 -- PAISACRAFT
--- CONFIGURACIÓN GENERAL v6.1.3
+-- CONFIGURACION GENERAL v6.1.5
 -- ============================================================
 
 local config = {}
@@ -10,45 +10,55 @@ local config = {}
 -- ============================================================
 
 config.PROJECT_NAME = "PaisaCraft"
-config.VERSION = "6.1.3"
+config.VERSION = "6.1.5"
+
+config.ROOT =
+    "/PaisaCraft"
 
 -- ============================================================
 -- REDNET
 -- ============================================================
 
-config.PROTOCOL = "builder_net"
-config.CENTRAL_HOSTNAME = "builder-central"
+config.PROTOCOL =
+    "builder_net"
 
--- Cada cuánto deberá avisar un dispositivo
--- de que sigue conectado.
+config.CENTRAL_HOSTNAME =
+    "builder-central"
+
 config.HEARTBEAT_INTERVAL = 5
 
--- Tiempo máximo sin comunicación antes
--- de considerar un worker desconectado.
 config.WORKER_TIMEOUT = 30
 
--- Una reserva de estación perteneciente a
--- un worker que desaparece se libera después
--- de este tiempo.
 config.RESERVATION_TIMEOUT = 30
 
 -- ============================================================
 -- ARCHIVOS
 -- ============================================================
 
-config.DATA_DIR = "data"
+config.DATA_DIR =
+    config.ROOT
+    ..
+    "/data"
 
 config.WORKER_STATE_FILE =
-    config.DATA_DIR .. "/worker_state.cfg"
+    config.DATA_DIR
+    ..
+    "/worker_state.cfg"
 
 config.CENTRAL_CONFIG_FILE =
-    config.DATA_DIR .. "/central.cfg"
+    config.DATA_DIR
+    ..
+    "/central.cfg"
 
 config.MONITOR_CONFIG_FILE =
-    config.DATA_DIR .. "/monitor.cfg"
+    config.DATA_DIR
+    ..
+    "/monitor.cfg"
 
 config.SETTINGS_FILE =
-    config.DATA_DIR .. "/settings.cfg"
+    config.DATA_DIR
+    ..
+    "/settings.cfg"
 
 -- ============================================================
 -- GPS
@@ -59,7 +69,7 @@ config.GPS_TIMEOUT = 5
 config.GPS_SYNC_INTERVAL = 40
 
 -- ============================================================
--- NAVEGACIÓN
+-- NAVEGACION
 -- ============================================================
 
 config.MAX_NAV_STEPS = 5000
@@ -96,7 +106,7 @@ config.SLOT_LAST = 16
 config.BUILD_SLOT_FIRST = 1
 config.BUILD_SLOT_LAST = 15
 
--- Exclusivo para material retirado.
+-- Slot reservado para material retirado.
 config.RESERVED_SLOT = 16
 
 config.MAX_BUILD_BLOCKS =
@@ -116,7 +126,6 @@ config.MAX_BUILD_BLOCKS =
 
 config.MIN_FUEL = 500
 
--- Fallback.
 config.TARGET_FUEL = 3000
 
 config.FUEL_SAFETY_MARGIN = 200

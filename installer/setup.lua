@@ -37,9 +37,9 @@ local FILES = {
     "worker.lua",
     "monitor.lua",
 
-    "starup/startup-worker.lua",
-    "starup/startup-central.lua",
-    "starup/startup-monitor.lua",
+    "startup/startup-worker.lua",
+    "startup/startup-central.lua",
+    "startup/startup-monitor.lua",
 
     "lib/config.lua",
     "lib/utils.lua",

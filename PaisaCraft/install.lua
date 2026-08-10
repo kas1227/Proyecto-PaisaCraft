@@ -3,64 +3,135 @@
 -- INSTALADOR v6.1.4
 -- ============================================================
 
-local config =
-    require("lib.config")
+local ROOT =
+    "/PaisaCraft"
 
-local utils =
-    require("lib.utils")
-
--- ============================================================
--- ARCHIVOS
--- ============================================================
+local DATA_DIR =
+    ROOT
+    .. "/data"
 
 local SETTINGS_FILE =
-    config.SETTINGS_FILE
+    DATA_DIR
+    .. "/settings.cfg"
 
 local STARTUP_TARGET =
-    "startup.lua"
+    "/startup.lua"
 
 -- ============================================================
--- GUARDAR CONFIGURACIÓN
+-- STARTUPS
+-- ============================================================
+
+local STARTUPS = {
+
+    WORKER =
+        ROOT
+        .. "/startup/startup-worker.lua",
+
+    CENTRAL =
+        ROOT
+        .. "/startup/startup-central.lua",
+
+    MONITOR =
+        ROOT
+        .. "/startup/startup-monitor.lua"
+
+}
+
+-- ============================================================
+-- CREAR DIRECTORIO
+-- ============================================================
+
+local function ensureDirectory(path)
+
+    if fs.exists(path) then
+        return true
+    end
+
+    fs.makeDir(path)
+
+    return fs.exists(path)
+
+end
+
+-- ============================================================
+-- GUARDAR TABLA
+-- ============================================================
+
+local function saveTable(
+    filename,
+    data
+)
+
+    local directory =
+        fs.getDir(filename)
+
+    if
+        directory
+        and
+        directory ~= ""
+    then
+
+        ensureDirectory(
+            directory
+        )
+
+    end
+
+    local file =
+        fs.open(
+            filename,
+            "w"
+        )
+
+    if not file then
+
+        return false,
+            "No puedo escribir "
+            ..
+            filename
+
+    end
+
+    file.write(
+        textutils.serialize(
+            data
+        )
+    )
+
+    file.close()
+
+    return true
+
+end
+
+-- ============================================================
+-- GUARDAR CONFIGURACION
 -- ============================================================
 
 local function saveSettings(
     role
 )
 
-    utils.ensureDirectory(
-        config.DATA_DIR
+    ensureDirectory(
+        DATA_DIR
     )
 
-    local previous =
-        utils.loadTable(
-            SETTINGS_FILE
-        )
-        or
-        {}
+    return saveTable(
 
-    previous.role =
-        role
+        SETTINGS_FILE,
 
-    previous.installedVersion =
-        config.VERSION
+        {
+            role =
+                role,
 
-    previous.computerID =
-        os.getComputerID()
+            computerID =
+                os.getComputerID(),
 
-    local ok, err =
-        utils.saveTable(
-            SETTINGS_FILE,
-            previous
-        )
+            root =
+                ROOT
+        }
 
-    if not ok then
-
-        return false,
-            err
-
-    end
-
-    return true
+    )
 
 end
 
@@ -69,8 +140,22 @@ end
 -- ============================================================
 
 local function installStartup(
-    source
+    role
 )
+
+    local source =
+        STARTUPS[role]
+
+    if not source then
+
+        return false,
+            "ROL_INVALIDO"
+
+    end
+
+    print("")
+    print("Startup origen:")
+    print(source)
 
     if not fs.exists(source) then
 
@@ -97,6 +182,19 @@ local function installStartup(
         STARTUP_TARGET
     )
 
+    if
+        not fs.exists(
+            STARTUP_TARGET
+        )
+    then
+
+        return false,
+            "No se pudo crear "
+            ..
+            STARTUP_TARGET
+
+    end
+
     return true
 
 end
@@ -106,8 +204,7 @@ end
 -- ============================================================
 
 local function installRole(
-    role,
-    startupFile
+    role
 )
 
     print("")
@@ -121,31 +218,16 @@ local function installRole(
         role
     )
 
-    -- ========================================================
-    -- DATA
-    -- ========================================================
-
-    utils.ensureDirectory(
-        config.DATA_DIR
-    )
-
-    -- ========================================================
-    -- STARTUP
-    -- ========================================================
-
     local startupOK,
         startupError =
         installStartup(
-            startupFile
+            role
         )
 
     if not startupOK then
 
         print("")
-        print(
-            "ERROR startup:"
-        )
-
+        print("ERROR startup:")
         print(
             tostring(
                 startupError
@@ -156,10 +238,6 @@ local function installRole(
 
     end
 
-    -- ========================================================
-    -- SETTINGS
-    -- ========================================================
-
     local settingsOK,
         settingsError =
         saveSettings(
@@ -169,10 +247,7 @@ local function installRole(
     if not settingsOK then
 
         print("")
-        print(
-            "ERROR settings:"
-        )
-
+        print("ERROR settings:")
         print(
             tostring(
                 settingsError
@@ -195,33 +270,22 @@ local function installRole(
     )
 
     print(
-        "Version:",
-        config.VERSION
-    )
-
-    print(
         "Computer ID:",
         os.getComputerID()
     )
 
     print("")
     print(
-        "startup.lua instalado."
+        "/startup.lua creado."
     )
 
     print("")
     print(
-        "Reinicia el dispositivo"
-    )
-
-    print(
-        "o ejecuta:"
+        "Reinicia con:"
     )
 
     print("")
-    print(
-        "reboot"
-    )
+    print("reboot")
 
     return true
 
@@ -231,77 +295,43 @@ end
 -- MENU
 -- ============================================================
 
-local function menu()
+term.clear()
+term.setCursorPos(1, 1)
 
-    term.clear()
-    term.setCursorPos(
-        1,
-        1
-    )
+print("==============================")
+print("       PAISACRAFT INSTALL")
+print("==============================")
 
-    print("==============================")
-    print("       PAISACRAFT INSTALL")
-    print("==============================")
+print("")
+print("Selecciona dispositivo:")
+print("")
+print("1. Worker")
+print("2. Central")
+print("3. Monitor")
+print("4. Cancelar")
+print("")
 
-    print("")
-    print(
-        "Version:",
-        config.VERSION
-    )
-
-    print("")
-    print(
-        "Selecciona dispositivo:"
-    )
-
-    print("")
-    print("1. Worker")
-    print("2. Central")
-    print("3. Monitor")
-    print("4. Cancelar")
-
-    print("")
-    write("> ")
-
-    return read()
-
-end
-
--- ============================================================
--- MAIN
--- ============================================================
+write("> ")
 
 local option =
-    menu()
+    read()
 
 if option == "1" then
 
     installRole(
-
-        "WORKER",
-
-        "startup/startup-worker.lua"
-
+        "WORKER"
     )
 
 elseif option == "2" then
 
     installRole(
-
-        "CENTRAL",
-
-        "startup/startup-central.lua"
-
+        "CENTRAL"
     )
 
 elseif option == "3" then
 
     installRole(
-
-        "MONITOR",
-
-        "startup/startup-monitor.lua"
-
+        "MONITOR"
     )
 
 else

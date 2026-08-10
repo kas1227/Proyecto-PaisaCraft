@@ -1,6 +1,6 @@
 -- ============================================================
 -- PAISACRAFT
--- GESTIÓN INTELIGENTE DE COMBUSTIBLE v6.1.2
+-- GESTION INTELIGENTE DE COMBUSTIBLE v6.1.5
 -- ============================================================
 
 local config =
@@ -24,7 +24,9 @@ function fuel.getLevel()
         turtle.getFuelLevel()
 
     if level == "unlimited" then
+
         return math.huge
+
     end
 
     return level
@@ -32,10 +34,26 @@ function fuel.getLevel()
 end
 
 -- ============================================================
--- DISTANCIA
+-- ¿COMBUSTIBLE ILIMITADO?
 -- ============================================================
 
-function fuel.distance(a, b)
+function fuel.isUnlimited()
+
+    return
+        fuel.getLevel()
+        ==
+        math.huge
+
+end
+
+-- ============================================================
+-- DISTANCIA MANHATTAN
+-- ============================================================
+
+function fuel.distance(
+    a,
+    b
+)
 
     if
         not a
@@ -62,10 +80,15 @@ function fuel.distance(a, b)
 end
 
 -- ============================================================
--- ÍNDICE -> POSICIÓN
+-- INDICE -> POSICION
+--
+-- Debe utilizar exactamente el mismo recorrido serpiente
+-- que jobs.lua.
 -- ============================================================
 
-function fuel.indexPosition(index)
+function fuel.indexPosition(
+    index
+)
 
     local assignment =
         state.assignment
@@ -95,15 +118,23 @@ function fuel.indexPosition(index)
 
     local row =
         math.floor(
-            index / width
+            index
+            /
+            width
         )
 
     local column =
-        index % width
+        index
+        %
+        width
 
     local x
 
-    if row % 2 == 0 then
+    if
+        row % 2
+        ==
+        0
+    then
 
         x =
             assignment.minX
@@ -121,7 +152,8 @@ function fuel.indexPosition(index)
 
     return {
 
-        x = x,
+        x =
+            x,
 
         y =
             assignment.floorY
@@ -138,7 +170,7 @@ function fuel.indexPosition(index)
 end
 
 -- ============================================================
--- POSICIONES QUE QUEDAN EN EL TRABAJO
+-- POSICIONES RESTANTES DEL TRABAJO
 -- ============================================================
 
 function fuel.remainingJobPositions()
@@ -170,11 +202,16 @@ function fuel.remainingJobPositions()
 end
 
 -- ============================================================
--- HORIZONTE DE UNA SALIDA
+-- HORIZONTE DE TRABAJO
 --
--- Aunque la tanda de materiales use hasta 960 bloques,
--- para la estimación de movimiento consideramos como máximo
--- 960 posiciones antes de volver a comprobar la autonomía.
+-- Una salida nunca necesita calcular mas trabajo
+-- que una tanda completa.
+--
+-- Actualmente:
+--
+-- 15 slots x 64 = 960
+--
+-- Si quedan menos bloques que eso, usamos los restantes.
 -- ============================================================
 
 function fuel.getWorkHorizon()
@@ -190,7 +227,44 @@ function fuel.getWorkHorizon()
 end
 
 -- ============================================================
--- ESTACIÓN A LA QUE DEBEMOS PODER REGRESAR
+-- MODO ACTUAL
+-- ============================================================
+
+function fuel.getBuildMode()
+
+    if
+        state.assignment
+        and
+        state.assignment.buildMode
+    then
+
+        return
+            state.assignment.buildMode
+
+    end
+
+    return
+        config.DEFAULT_BUILD_MODE
+
+end
+
+-- ============================================================
+-- ESTACION DE REGRESO
+--
+-- Esta es la estacion que la turtle debe poder alcanzar
+-- desde cualquier punto del trabajo.
+--
+-- PLACE:
+--     fuelStation
+--
+-- REPLACE:
+--     unloadStation
+--
+-- CLEAR:
+--     unloadStation
+--
+-- Si alguna estacion no existe utilizamos los siguientes
+-- fallbacks disponibles.
 -- ============================================================
 
 function fuel.getReturnStation()
@@ -199,20 +273,44 @@ function fuel.getReturnStation()
         state.assignment
 
     if not assignment then
+
         return state.home
+
     end
 
-    -- Si generamos drops, descarga es el primer
-    -- punto lógico de servicio.
+    local mode =
+        fuel.getBuildMode()
+
+    -- ========================================================
+    -- REPLACE / CLEAR
+    --
+    -- La descarga es el primer paso del ciclo.
+    -- ========================================================
 
     if
-        assignment.unloadStation
+        mode ==
+        config.BUILD_MODES.REPLACE
+
+        or
+
+        mode ==
+        config.BUILD_MODES.CLEAR
     then
 
-        return
-            assignment.unloadStation
+        if assignment.unloadStation then
+
+            return
+                assignment.unloadStation
+
+        end
 
     end
+
+    -- ========================================================
+    -- PLACE
+    --
+    -- O fallback para cualquier modo.
+    -- ========================================================
 
     if assignment.fuelStation then
 
@@ -228,29 +326,49 @@ function fuel.getReturnStation()
 
     end
 
+    if assignment.unloadStation then
+
+        return
+            assignment.unloadStation
+
+    end
+
     return state.home
 
 end
 
 -- ============================================================
--- RESERVA MÍNIMA DESDE UNA POSICIÓN
+-- RESERVA MINIMA PARA PODER VOLVER
 --
--- Esta es la protección anti-turtle-varada.
+-- Evita que la turtle continue trabajando cuando
+-- ya no podria alcanzar la estacion de servicio.
 -- ============================================================
 
 function fuel.safeReturnRequirement(
     position
 )
 
+    if fuel.isUnlimited() then
+
+        return 0
+
+    end
+
     if not position then
-        return config.MIN_FUEL
+
+        return
+            config.MIN_FUEL
+
     end
 
     local station =
         fuel.getReturnStation()
 
     if not station then
-        return config.MIN_FUEL
+
+        return
+            config.MIN_FUEL
+
     end
 
     local required =
@@ -262,14 +380,19 @@ function fuel.safeReturnRequirement(
         config.FUEL_SAFETY_MARGIN
 
     return math.max(
+
         config.MIN_FUEL,
-        math.ceil(required)
+
+        math.ceil(
+            required
+        )
+
     )
 
 end
 
 -- ============================================================
--- ¿DEBEMOS VOLVER A REPOSTAR?
+-- ¿DEBEMOS VOLVER A SERVICIO?
 -- ============================================================
 
 function fuel.needsService(
@@ -280,7 +403,9 @@ function fuel.needsService(
         fuel.getLevel()
 
     if level == math.huge then
+
         return false
+
     end
 
     local required =
@@ -294,41 +419,37 @@ function fuel.needsService(
 end
 
 -- ============================================================
--- ESTIMAR OBJETIVO DE UNA NUEVA SALIDA
+-- DISTANCIA DEL CICLO POST-FUEL
 --
--- Se usa DESPUÉS de volver a servicio.
+-- Calcula:
 --
--- startPosition:
--- normalmente fuelStation.
+-- PLACE / REPLACE:
 --
--- workPosition:
--- punto donde reanudará.
+-- fuel
+--   -> materiales
+--   -> trabajo
 --
--- includeMaterialTrip:
--- fuel -> materiales -> trabajo.
+-- CLEAR:
+--
+-- fuel
+--   -> trabajo
 -- ============================================================
 
-function fuel.estimateRequired(
-    startPosition,
+function fuel.serviceToWorkDistance(
+    fuelPosition,
     workPosition,
     includeMaterialTrip
 )
 
-    if not state.assignment then
-        return config.TARGET_FUEL
-    end
-
     local required = 0
 
     local current =
-        startPosition
-
-    -- ========================================================
-    -- FUEL -> MATERIALES
-    -- ========================================================
+        fuelPosition
 
     if
         includeMaterialTrip
+        and
+        state.assignment
         and
         state.assignment.materialStation
     then
@@ -337,8 +458,11 @@ function fuel.estimateRequired(
             required
             +
             fuel.distance(
+
                 current,
+
                 state.assignment.materialStation
+
             )
 
         current =
@@ -346,11 +470,11 @@ function fuel.estimateRequired(
 
     end
 
-    -- ========================================================
-    -- ESTACIÓN -> TRABAJO
-    -- ========================================================
-
-    if workPosition then
+    if
+        current
+        and
+        workPosition
+    then
 
         required =
             required
@@ -362,10 +486,69 @@ function fuel.estimateRequired(
 
     end
 
+    return required
+
+end
+
+-- ============================================================
+-- ESTIMAR COMBUSTIBLE DE UNA NUEVA SALIDA
+--
+-- La turtle acaba de repostar.
+--
+-- Calculamos combustible suficiente para:
+--
+-- 1. salir de fuelStation
+-- 2. pasar por materiales si corresponde
+-- 3. regresar al trabajo
+-- 4. procesar como maximo una tanda
+-- 5. conservar capacidad de volver a la primera estacion
+--    del siguiente servicio
+-- 6. margen de seguridad
+-- ============================================================
+
+function fuel.estimateRequired(
+    startPosition,
+    workPosition,
+    includeMaterialTrip
+)
+
+    if fuel.isUnlimited() then
+
+        return 0
+
+    end
+
+    if not state.assignment then
+
+        return
+            config.TARGET_FUEL
+
+    end
+
+    local required = 0
+
     -- ========================================================
-    -- HORIZONTE DE TRABAJO
+    -- SALIR DEL SERVICIO Y REGRESAR AL TRABAJO
+    -- ========================================================
+
+    required =
+        required
+        +
+        fuel.serviceToWorkDistance(
+
+            startPosition,
+
+            workPosition,
+
+            includeMaterialTrip
+
+        )
+
+    -- ========================================================
+    -- HORIZONTE
     --
-    -- N movimientos para recorrer la tanda.
+    -- Estimacion conservadora:
+    -- un movimiento por posicion del trabajo.
     -- ========================================================
 
     local horizon =
@@ -377,18 +560,18 @@ function fuel.estimateRequired(
         horizon
 
     -- ========================================================
-    -- GARANTÍA DE REGRESO
+    -- GARANTIA DE REGRESO
     --
-    -- Tras N movimientos, la turtle podría encontrarse
-    -- hasta N bloques más lejos de la estación.
+    -- El punto de trabajo puede estar lejos de la estacion
+    -- y ademas la turtle puede avanzar durante la tanda.
     --
-    -- Por eso:
+    -- Sumamos:
     --
-    -- distancia inicial trabajo -> servicio
+    -- trabajo -> primera estacion de servicio
     -- +
-    -- N movimientos adicionales
+    -- horizonte adicional
     --
-    -- Es una cota conservadora.
+    -- Esto es deliberadamente conservador.
     -- ========================================================
 
     local returnStation =
@@ -413,13 +596,17 @@ function fuel.estimateRequired(
     end
 
     -- ========================================================
-    -- MARGEN
+    -- MARGEN DE SEGURIDAD
     -- ========================================================
 
     required =
         required
         +
         config.FUEL_SAFETY_MARGIN
+
+    -- ========================================================
+    -- MINIMO GLOBAL
+    -- ========================================================
 
     required =
         math.max(
@@ -434,23 +621,46 @@ function fuel.estimateRequired(
 end
 
 -- ============================================================
--- OBJETIVO PARA RESTOCK
+-- OBJETIVO DE COMBUSTIBLE PARA RESTOCK
 --
--- IMPORTANTE:
--- Siempre calcula como una NUEVA tanda.
--- No resta blocksThisBatch de la tanda anterior.
+-- stations.fullRestock():
+--
+-- REPLACE:
+-- descarga -> fuel -> materiales -> trabajo
+--
+-- CLEAR:
+-- descarga -> fuel -> trabajo
+--
+-- PLACE:
+-- fuel -> materiales -> trabajo
+--
+-- calculateTarget() se llama cuando la turtle va a repostar.
+-- Por eso el inicio del calculo es fuelStation.
 -- ============================================================
 
 function fuel.calculateTarget(
     returnPosition
 )
 
+    if fuel.isUnlimited() then
+
+        return 0
+
+    end
+
     local assignment =
         state.assignment
 
     if not assignment then
-        return config.TARGET_FUEL
+
+        return
+            config.TARGET_FUEL
+
     end
+
+    -- ========================================================
+    -- PUNTO DESDE EL QUE SALDRA TRAS REPOSTAR
+    -- ========================================================
 
     local startPosition =
         assignment.fuelStation
@@ -461,6 +671,16 @@ function fuel.calculateTarget(
             state.getPosition()
 
     end
+
+    -- ========================================================
+    -- PUNTO DE TRABAJO
+    --
+    -- Si fullRestock(true) guardo la posicion,
+    -- utilizamos esa.
+    --
+    -- En restock inicial calculamos la posicion
+    -- correspondiente al currentIndex.
+    -- ========================================================
 
     local workPosition =
         returnPosition
@@ -474,21 +694,123 @@ function fuel.calculateTarget(
 
     end
 
+    -- ========================================================
+    -- ¿HAY VIAJE A MATERIALES?
+    --
+    -- PLACE    -> si
+    -- REPLACE  -> si
+    -- CLEAR    -> no
+    -- ========================================================
+
     local includeMaterialTrip =
         assignment.materialStation
         ~= nil
         and
-        assignment.buildMode
+        fuel.getBuildMode()
         ~=
         config.BUILD_MODES.CLEAR
 
-    return fuel.estimateRequired(
+    local calculated =
+        fuel.estimateRequired(
 
-        startPosition,
-        workPosition,
-        includeMaterialTrip
+            startPosition,
+
+            workPosition,
+
+            includeMaterialTrip
+
+        )
+
+    -- ========================================================
+    -- TARGET_FUEL COMO PISO RECOMENDADO
+    --
+    -- Si la estimacion pide mas, usamos la estimacion.
+    --
+    -- Si pide menos, mantenemos TARGET_FUEL para evitar
+    -- viajes excesivamente frecuentes a combustible.
+    -- ========================================================
+
+    return math.max(
+
+        calculated,
+
+        config.TARGET_FUEL
 
     )
+
+end
+
+-- ============================================================
+-- INFORMACION DE AUTONOMIA
+--
+-- Util para worker / monitor.
+-- ============================================================
+
+function fuel.getStats()
+
+    local level =
+        fuel.getLevel()
+
+    local position =
+        state.getPosition()
+
+    local safeReturn =
+        fuel.safeReturnRequirement(
+            position
+        )
+
+    local target =
+        0
+
+    if state.assignment then
+
+        target =
+            fuel.calculateTarget(
+                position
+            )
+
+    end
+
+    local available = math.huge
+
+    if level ~= math.huge then
+
+        available =
+            math.max(
+                0,
+                level
+                -
+                safeReturn
+            )
+
+    end
+
+    return {
+
+        level =
+            level,
+
+        target =
+            target,
+
+        safeReturn =
+            safeReturn,
+
+        available =
+            available,
+
+        needsService =
+            fuel.needsService(
+                position
+            ),
+
+        returnStation =
+            fuel.getReturnStation(),
+
+        horizon =
+            fuel.getWorkHorizon()
+
+    }
 
 end
 

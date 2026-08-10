@@ -1,413 +1,186 @@
 -- ============================================================
 -- PAISACRAFT
--- INSTALADOR v6.1.4
+-- SETUP / BOOTSTRAP
 -- ============================================================
+
+local GITHUB_USER =
+    "kas1227"
+
+local GITHUB_REPO =
+    "Proyecto-PaisaCraft"
+
+local GITHUB_BRANCH =
+    "main"
 
 local ROOT =
     "/PaisaCraft"
 
-local DATA_DIR =
-    ROOT
-    ..
-    "/data"
-
-local SETTINGS_FILE =
-    DATA_DIR
-    ..
-    "/settings.cfg"
-
-local STARTUP_TARGET =
-    "/startup.lua"
+local BASE_URL =
+    "https://raw.githubusercontent.com/"
+    .. GITHUB_USER
+    .. "/"
+    .. GITHUB_REPO
+    .. "/"
+    .. GITHUB_BRANCH
+    .. "/PaisaCraft"
 
 -- ============================================================
--- STARTUPS
+-- ARCHIVOS DEL PROYECTO
 -- ============================================================
 
-local STARTUPS = {
+local FILES = {
 
-    WORKER =
-        ROOT
-        ..
-        "/startup/startup-worker.lua",
+    -- Programas principales
+    "central.lua",
+    "worker.lua",
+    "monitor.lua",
 
-    CENTRAL =
-        ROOT
-        ..
-        "/startup/startup-central.lua",
+    -- Instalacion / update
+    "install.lua",
+    "update.lua",
 
-    MONITOR =
-        ROOT
-        ..
-        "/startup/startup-monitor.lua"
+    -- Startup
+    "startup/startup-worker.lua",
+    "startup/startup-central.lua",
+    "startup/startup-monitor.lua",
+
+    -- Librerias
+    "lib/builder.lua",
+    "lib/config.lua",
+    "lib/fuel.lua",
+    "lib/gps.lua",
+    "lib/inventory.lua",
+    "lib/jobs.lua",
+    "lib/movement.lua",
+    "lib/navigation.lua",
+    "lib/protocol.lua",
+    "lib/state.lua",
+    "lib/stations.lua",
+    "lib/utils.lua"
 
 }
 
 -- ============================================================
--- ASEGURAR DIRECTORIO
+-- CREAR DIRECTORIO PADRE
 -- ============================================================
 
-local function ensureDirectory(path)
-
-    if fs.exists(path) then
-        return true
-    end
-
-    fs.makeDir(path)
-
-    return fs.exists(path)
-
-end
-
--- ============================================================
--- GUARDAR TABLA
--- ============================================================
-
-local function saveTable(
-    filename,
-    data
-)
+local function ensureParent(path)
 
     local directory =
-        fs.getDir(filename)
+        fs.getDir(path)
 
     if
         directory
         and
         directory ~= ""
+        and
+        not fs.exists(directory)
     then
 
-        ensureDirectory(
-            directory
+        fs.makeDir(directory)
+
+    end
+
+end
+
+-- ============================================================
+-- DESCARGAR ARCHIVO
+-- ============================================================
+
+local function downloadFile(
+    relativePath
+)
+
+    local url =
+        BASE_URL
+        ..
+        "/"
+        ..
+        relativePath
+
+    local destination =
+        ROOT
+        ..
+        "/"
+        ..
+        relativePath
+
+    print("")
+    print(
+        "Descargando:"
+    )
+
+    print(
+        relativePath
+    )
+
+    local response,
+        errorMessage =
+        http.get(
+            url
         )
 
+    if not response then
+
+        return false,
+            errorMessage
+            or
+            "HTTP_ERROR"
+
+    end
+
+    local content =
+        response.readAll()
+
+    response.close()
+
+    if
+        not content
+        or
+        content == ""
+    then
+
+        return false,
+            "ARCHIVO_VACIO"
+
+    end
+
+    ensureParent(
+        destination
+    )
+
+    local temporary =
+        destination
+        ..
+        ".download"
+
+    if fs.exists(temporary) then
+        fs.delete(temporary)
     end
 
     local file =
         fs.open(
-            filename,
+            temporary,
             "w"
         )
 
     if not file then
 
         return false,
-            "No puedo escribir: "
-            ..
-            filename
+            "NO_PUEDO_ESCRIBIR"
 
     end
 
-    file.write(
-        textutils.serialize(
-            data
-        )
-    )
-
+    file.write(content)
     file.close()
 
-    return true
-
-end
-
--- ============================================================
--- COMPROBAR PAISACRAFT
--- ============================================================
-
-local function checkProject()
-
-    if not fs.exists(ROOT) then
-
-        return false,
-            "No existe "
-            ..
-            ROOT
-
+    if fs.exists(destination) then
+        fs.delete(destination)
     end
 
-    local required = {
-
-        ROOT
-        ..
-        "/worker.lua",
-
-        ROOT
-        ..
-        "/central.lua",
-
-        ROOT
-        ..
-        "/monitor.lua",
-
-        STARTUPS.WORKER,
-
-        STARTUPS.CENTRAL,
-
-        STARTUPS.MONITOR
-
-    }
-
-    for _, path
-        in ipairs(required)
-    do
-
-        if not fs.exists(path) then
-
-            return false,
-                "No existe "
-                ..
-                path
-
-        end
-
-    end
-
-    return true
-
-end
-
--- ============================================================
--- INSTALAR STARTUP
--- ============================================================
-
-local function installStartup(
-    role
-)
-
-    local source =
-        STARTUPS[role]
-
-    if not source then
-
-        return false,
-            "ROL_INVALIDO"
-
-    end
-
-    print("")
-    print(
-        "Startup origen:"
-    )
-
-    print(
-        source
-    )
-
-    if not fs.exists(source) then
-
-        return false,
-            "No existe "
-            ..
-            source
-
-    end
-
-    -- ========================================================
-    -- QUITAR STARTUP ANTERIOR
-    -- ========================================================
-
-    if fs.exists(
-        STARTUP_TARGET
-    )
-    then
-
-        fs.delete(
-            STARTUP_TARGET
-        )
-
-    end
-
-    -- ========================================================
-    -- COPIAR
-    -- ========================================================
-
-    fs.copy(
-        source,
-        STARTUP_TARGET
-    )
-
-    if not fs.exists(
-        STARTUP_TARGET
-    )
-    then
-
-        return false,
-            "No se pudo crear "
-            ..
-            STARTUP_TARGET
-
-    end
-
-    return true
-
-end
-
--- ============================================================
--- GUARDAR CONFIGURACIÓN
--- ============================================================
-
-local function saveSettings(
-    role
-)
-
-    ensureDirectory(
-        DATA_DIR
-    )
-
-    return saveTable(
-
-        SETTINGS_FILE,
-
-        {
-            role =
-                role,
-
-            computerID =
-                os.getComputerID(),
-
-            root =
-                ROOT
-
-        }
-
-    )
-
-end
-
--- ============================================================
--- INSTALAR ROL
--- ============================================================
-
-local function installRole(
-    role
-)
-
-    print("")
-    print("==============================")
-    print("          INSTALANDO")
-    print("==============================")
-
-    print("")
-    print(
-        "Rol:",
-        role
-    )
-
-    -- ========================================================
-    -- COMPROBAR PROYECTO
-    -- ========================================================
-
-    local projectOK,
-        projectError =
-        checkProject()
-
-    if not projectOK then
-
-        print("")
-        print(
-            "ERROR:"
-        )
-
-        print(
-            tostring(
-                projectError
-            )
-        )
-
-        return false
-
-    end
-
-    -- ========================================================
-    -- INSTALAR STARTUP
-    -- ========================================================
-
-    local startupOK,
-        startupError =
-        installStartup(
-            role
-        )
-
-    if not startupOK then
-
-        print("")
-        print(
-            "ERROR startup:"
-        )
-
-        print(
-            tostring(
-                startupError
-            )
-        )
-
-        return false
-
-    end
-
-    -- ========================================================
-    -- SETTINGS
-    -- ========================================================
-
-    local settingsOK,
-        settingsError =
-        saveSettings(
-            role
-        )
-
-    if not settingsOK then
-
-        print("")
-        print(
-            "ERROR settings:"
-        )
-
-        print(
-            tostring(
-                settingsError
-            )
-        )
-
-        return false
-
-    end
-
-    -- ========================================================
-    -- COMPLETO
-    -- ========================================================
-
-    print("")
-    print("==============================")
-    print("     INSTALACION COMPLETA")
-    print("==============================")
-
-    print("")
-    print(
-        "Rol:",
-        role
-    )
-
-    print(
-        "Computer ID:",
-        os.getComputerID()
-    )
-
-    print("")
-    print(
-        "Startup:"
-    )
-
-    print(
-        STARTUP_TARGET
-    )
-
-    print("")
-    print(
-        "Reinicia con:"
-    )
-
-    print("")
-    print(
-        "reboot"
+    fs.move(
+        temporary,
+        destination
     )
 
     return true
@@ -415,69 +188,227 @@ local function installRole(
 end
 
 -- ============================================================
--- MENU
+-- UI
 -- ============================================================
 
 term.clear()
-
 term.setCursorPos(
     1,
     1
 )
 
 print("==============================")
-print("       PAISACRAFT INSTALL")
+print("       PAISACRAFT SETUP")
 print("==============================")
 
 print("")
 print(
-    "Ruta:"
+    "Repositorio:"
 )
 
 print(
+    GITHUB_USER
+    ..
+    "/"
+    ..
+    GITHUB_REPO
+)
+
+print("")
+print(
+    "Destino:",
     ROOT
 )
 
 print("")
 print(
-    "Selecciona dispositivo:"
+    "Archivos:",
+    #FILES
 )
 
 print("")
-print("1. Worker")
-print("2. Central")
-print("3. Monitor")
-print("4. Cancelar")
+print(
+    "¿Continuar? (s/n)"
+)
 
-print("")
 write("> ")
 
-local option =
-    read()
-
-if option == "1" then
-
-    installRole(
-        "WORKER"
+if
+    string.lower(
+        read()
     )
-
-elseif option == "2" then
-
-    installRole(
-        "CENTRAL"
-    )
-
-elseif option == "3" then
-
-    installRole(
-        "MONITOR"
-    )
-
-else
+    ~=
+    "s"
+then
 
     print("")
     print(
-        "Instalacion cancelada."
+        "Cancelado."
+    )
+
+    return
+
+end
+
+-- ============================================================
+-- CREAR ROOT
+-- ============================================================
+
+if not fs.exists(ROOT) then
+
+    fs.makeDir(ROOT)
+
+end
+
+-- ============================================================
+-- DESCARGAR TODO
+-- ============================================================
+
+local successful = 0
+local errors = {}
+
+for index, relativePath
+    in ipairs(FILES)
+do
+
+    print("")
+    print(
+        "["
+        ..
+        index
+        ..
+        "/"
+        ..
+        #FILES
+        ..
+        "]"
+    )
+
+    local ok, err =
+        downloadFile(
+            relativePath
+        )
+
+    if ok then
+
+        successful =
+            successful + 1
+
+        print(
+            "OK"
+        )
+
+    else
+
+        table.insert(
+            errors,
+            {
+                file =
+                    relativePath,
+
+                error =
+                    tostring(err)
+            }
+        )
+
+        print(
+            "ERROR:"
+        )
+
+        print(
+            tostring(err)
+        )
+
+    end
+
+end
+
+-- ============================================================
+-- RESULTADO
+-- ============================================================
+
+print("")
+print("==============================")
+print("          RESULTADO")
+print("==============================")
+
+print("")
+print(
+    "Correctos:",
+    successful
+)
+
+print(
+    "Errores:",
+    #errors
+)
+
+if #errors > 0 then
+
+    print("")
+    print(
+        "Archivos fallidos:"
+    )
+
+    for _, item
+        in ipairs(errors)
+    do
+
+        print("")
+        print(
+            item.file
+        )
+
+        print(
+            item.error
+        )
+
+    end
+
+    print("")
+    print(
+        "No se ejecutara install.lua."
+    )
+
+    return
+
+end
+
+-- ============================================================
+-- DATA
+-- ============================================================
+
+local dataDirectory =
+    ROOT
+    ..
+    "/data"
+
+if not fs.exists(dataDirectory) then
+
+    fs.makeDir(
+        dataDirectory
     )
 
 end
+
+-- ============================================================
+-- EJECUTAR INSTALL
+-- ============================================================
+
+print("")
+print("==============================")
+print("      DESCARGA COMPLETA")
+print("==============================")
+
+print("")
+print(
+    "Iniciando install.lua..."
+)
+
+sleep(1)
+
+shell.run(
+    ROOT
+    ..
+    "/install.lua"
+)

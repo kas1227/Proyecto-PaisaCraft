@@ -1,6 +1,6 @@
 -- ============================================================
 -- PAISACRAFT
--- INVENTARIO v6.1.2
+-- INVENTARIO v6.1.5
 -- ============================================================
 
 local config =
@@ -405,8 +405,10 @@ function inventory.snapshot()
         local detail = nil
 
         if count > 0 then
+
             detail =
                 turtle.getItemDetail(slot)
+
         end
 
         result[slot] = {
@@ -460,8 +462,10 @@ function inventory.findPositiveDeltas(
         local detail = nil
 
         if newCount > 0 then
+
             detail =
                 turtle.getItemDetail(slot)
+
         end
 
         local newName =
@@ -529,8 +533,10 @@ local function transferDeltaToReserved(
 )
 
     if not delta then
+
         return false,
             "DELTA_INVALIDO"
+
     end
 
     if delta.slot == config.RESERVED_SLOT then
@@ -750,10 +756,11 @@ function inventory.needsUnload()
         return false
     end
 
+    -- Si el slot reservado contiene algo,
+    -- existe material retirado pendiente de descargar.
     return
-        inventory.getReservedCount() > 0
-        and
-        inventory.getReservedSpace() == 0
+        inventory.getReservedCount()
+        > 0
 
 end
 

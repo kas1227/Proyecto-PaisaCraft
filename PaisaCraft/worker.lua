@@ -1,6 +1,27 @@
 -- ============================================================
 -- PAISACRAFT
--- WORKER PRINCIPAL v6.1.3
+-- WORKER PRINCIPAL v6.1.5
+-- ============================================================
+
+-- ============================================================
+-- RUTAS
+--
+-- Permite ejecutar:
+--
+-- /PaisaCraft/worker.lua
+--
+-- desde cualquier directorio.
+-- ============================================================
+
+package.path =
+    package.path
+    ..
+    ";/PaisaCraft/?.lua"
+    ..
+    ";/PaisaCraft/?/init.lua"
+
+-- ============================================================
+-- MODULOS
 -- ============================================================
 
 local config =
@@ -19,14 +40,16 @@ local jobs =
     require("lib.jobs")
 
 -- ============================================================
--- ESTADO DE EJECUCIÓN
+-- ESTADO DE EJECUCION
 -- ============================================================
 
-local running = true
+local running =
+    true
 
--- Durante la pantalla de recuperación de un trabajo anterior
--- queremos que la central NO considere la turtle disponible.
-local recoveryMode = false
+-- Cuando recuperamos un trabajo anterior,
+-- la Central no debe considerar la turtle libre.
+local recoveryMode =
+    false
 
 -- ============================================================
 -- UI
@@ -35,7 +58,11 @@ local recoveryMode = false
 local function header()
 
     term.clear()
-    term.setCursorPos(1, 1)
+
+    term.setCursorPos(
+        1,
+        1
+    )
 
     print("==============================")
     print("       PAISACRAFT WORKER")
@@ -58,36 +85,60 @@ local function header()
 end
 
 -- ============================================================
--- VALIDAR POSICIÓN
+-- VALIDAR POSICION
 -- ============================================================
 
-local function validPosition(position)
+local function validPosition(
+    position
+)
 
     return
-        type(position) == "table"
+        type(position)
+        ==
+        "table"
+
         and
-        type(position.x) == "number"
+
+        type(position.x)
+        ==
+        "number"
+
         and
-        type(position.y) == "number"
+
+        type(position.y)
+        ==
+        "number"
+
         and
-        type(position.z) == "number"
+
+        type(position.z)
+        ==
+        "number"
 
 end
 
 -- ============================================================
--- VALIDAR ASIGNACIÓN
+-- VALIDAR ASIGNACION
 -- ============================================================
 
 local function validateAssignment(
     assignment
 )
 
-    if type(assignment) ~= "table" then
+    if
+        type(assignment)
+        ~=
+        "table"
+    then
 
         return false,
             "ASIGNACION_INVALIDA"
 
     end
+
+    -- ========================================================
+    -- CAMPOS NUMERICOS
+    -- ========================================================
 
     local requiredNumbers = {
 
@@ -110,14 +161,17 @@ local function validateAssignment(
     }
 
     for _, key
-        in ipairs(requiredNumbers)
+        in ipairs(
+            requiredNumbers
+        )
     do
 
         if
             type(
                 assignment[key]
             )
-            ~= "number"
+            ~=
+            "number"
         then
 
             return false,
@@ -134,9 +188,15 @@ local function validateAssignment(
     -- ========================================================
 
     if
-        assignment.width <= 0
+        assignment.width
+        <=
+        0
+
         or
-        assignment.depth <= 0
+
+        assignment.depth
+        <=
+        0
     then
 
         return false,
@@ -148,7 +208,9 @@ local function validateAssignment(
         assignment.minX
         >
         assignment.maxX
+
         or
+
         assignment.minZ
         >
         assignment.maxZ
@@ -160,8 +222,19 @@ local function validateAssignment(
     end
 
     -- ========================================================
-    -- ÍNDICES
+    -- INDICES
     -- ========================================================
+
+    if
+        assignment.startIndex
+        <
+        0
+    then
+
+        return false,
+            "START_INDEX_INVALIDO"
+
+    end
 
     if
         assignment.startIndex
@@ -174,17 +247,12 @@ local function validateAssignment(
 
     end
 
-    if assignment.startIndex < 0 then
-
-        return false,
-            "START_INDEX_INVALIDO"
-
-    end
-
     local maximumIndex =
-        assignment.width
-        *
-        assignment.depth
+        (
+            assignment.width
+            *
+            assignment.depth
+        )
         -
         1
 
@@ -227,11 +295,21 @@ local function validateAssignment(
         config.DEFAULT_BUILD_MODE
 
     if
-        mode ~= config.BUILD_MODES.PLACE
+        mode
+        ~=
+        config.BUILD_MODES.PLACE
+
         and
-        mode ~= config.BUILD_MODES.REPLACE
+
+        mode
+        ~=
+        config.BUILD_MODES.REPLACE
+
         and
-        mode ~= config.BUILD_MODES.CLEAR
+
+        mode
+        ~=
+        config.BUILD_MODES.CLEAR
     then
 
         return false,
@@ -242,7 +320,7 @@ local function validateAssignment(
     end
 
     -- ========================================================
-    -- FUEL
+    -- COMBUSTIBLE
     -- ========================================================
 
     if
@@ -258,11 +336,17 @@ local function validateAssignment(
 
     -- ========================================================
     -- MATERIALES
+    --
+    -- CLEAR no necesita materiales.
     -- ========================================================
 
     if
-        mode ~= config.BUILD_MODES.CLEAR
+        mode
+        ~=
+        config.BUILD_MODES.CLEAR
+
         and
+
         not validPosition(
             assignment.materialStation
         )
@@ -275,19 +359,26 @@ local function validateAssignment(
 
     -- ========================================================
     -- DESCARGA
+    --
+    -- REPLACE / CLEAR necesitan descargar
+    -- los bloques retirados.
     -- ========================================================
 
     if
         (
-            mode ==
+            mode
+            ==
             config.BUILD_MODES.REPLACE
 
             or
 
-            mode ==
+            mode
+            ==
             config.BUILD_MODES.CLEAR
         )
+
         and
+
         not validPosition(
             assignment.unloadStation
         )
@@ -306,7 +397,9 @@ end
 -- REPORTAR
 -- ============================================================
 
-local function report(status)
+local function report(
+    status
+)
 
     if protocol.centralID then
 
@@ -319,30 +412,33 @@ local function report(status)
 end
 
 -- ============================================================
--- ESTADO PARA HEARTBEAT
---
--- Este estado es deliberadamente conservador.
---
--- La prioridad es que tras reiniciar la central
--- una turtle ocupada NO aparezca como disponible.
+-- ESTADO DEL HEARTBEAT
 -- ============================================================
 
 local function getHeartbeatStatus()
 
     if recoveryMode then
+
         return "RECOVERY"
+
     end
 
     if state.returnRequested then
+
         return "RETURNING_HOME"
+
     end
 
     if state.paused then
+
         return "PAUSED"
+
     end
 
     if state.hasActiveJob() then
+
         return "BUILDING"
+
     end
 
     return "IDLE"
@@ -350,13 +446,21 @@ local function getHeartbeatStatus()
 end
 
 -- ============================================================
--- PROCESAR CONTROL
+-- PROCESAR MENSAJE DE CONTROL
 -- ============================================================
 
-local function processControlMessage(msg)
+local function processControlMessage(
+    msg
+)
 
-    if type(msg) ~= "table" then
+    if
+        type(msg)
+        ~=
+        "table"
+    then
+
         return true
+
     end
 
     -- ========================================================
@@ -364,7 +468,8 @@ local function processControlMessage(msg)
     -- ========================================================
 
     if
-        msg.type ==
+        msg.type
+        ==
         protocol.MESSAGE.PAUSE
     then
 
@@ -386,7 +491,8 @@ local function processControlMessage(msg)
     -- ========================================================
 
     if
-        msg.type ==
+        msg.type
+        ==
         protocol.MESSAGE.RESUME
     then
 
@@ -408,12 +514,11 @@ local function processControlMessage(msg)
     -- ========================================================
 
     if
-        msg.type ==
+        msg.type
+        ==
         protocol.MESSAGE.RETURN_HOME
     then
 
-        -- Si no existe HOME todavía no podemos ejecutar
-        -- realmente un regreso.
         if not state.hasHome() then
 
             print("")
@@ -422,7 +527,7 @@ local function processControlMessage(msg)
             )
 
             print(
-                "HOME todavía no existe."
+                "HOME no configurado."
             )
 
             return true
@@ -440,6 +545,8 @@ local function processControlMessage(msg)
             "Regreso HOME solicitado."
         )
 
+        -- false interrumpe el trabajo actual.
+
         return false
 
     end
@@ -456,17 +563,25 @@ local function checkPendingMessages()
 
     while true do
 
-        local id, msg =
-            protocol.receive(0)
+        local id,
+            msg =
+            protocol.receive(
+                0
+            )
 
         if not id then
+
             return
+
         end
 
         if
             protocol.centralID
+
             and
-            id ==
+
+            id
+            ==
             protocol.centralID
         then
 
@@ -481,17 +596,21 @@ local function checkPendingMessages()
 end
 
 -- ============================================================
--- PAUSA
+-- ESPERAR SI ESTA PAUSADA
 -- ============================================================
 
 local function waitIfPaused()
 
     if not state.paused then
+
         return true
+
     end
 
     if state.returnRequested then
+
         return false
+
     end
 
     report(
@@ -505,19 +624,26 @@ local function waitIfPaused()
 
     while
         state.paused
+
         and
+
         not state.returnRequested
     do
 
-        local id, msg =
+        local id,
+            msg =
             protocol.receiveCentral(
                 2
             )
 
         if
             id
+
             and
-            type(msg) == "table"
+
+            type(msg)
+            ==
+            "table"
         then
 
             processControlMessage(
@@ -533,7 +659,9 @@ local function waitIfPaused()
     end
 
     if state.returnRequested then
+
         return false
+
     end
 
     report(
@@ -546,9 +674,14 @@ end
 
 -- ============================================================
 -- CALLBACK DE CONTROL
+--
+-- jobs / stations / navigation pueden llamar
+-- esta funcion durante operaciones largas.
 -- ============================================================
 
-local function controlCallback(msg)
+local function controlCallback(
+    msg
+)
 
     if msg then
 
@@ -563,7 +696,9 @@ local function controlCallback(msg)
     end
 
     if state.returnRequested then
+
         return false
+
     end
 
     if state.paused then
@@ -585,7 +720,12 @@ jobs.setControlCallback(
 )
 
 -- ============================================================
--- DESPUÉS DE PARKED
+-- DESPUES DE PARKED
+--
+-- NO eliminamos assignment.
+--
+-- Una nueva asignacion puede reemplazar el trabajo ya
+-- terminado porque state.hasActiveJob() sera false.
 -- ============================================================
 
 local function settleAfterParking()
@@ -601,7 +741,7 @@ local function settleAfterParking()
 end
 
 -- ============================================================
--- REGRESAR HOME
+-- EJECUTAR REGRESO HOME
 -- ============================================================
 
 local function executeReturnHome()
@@ -613,12 +753,13 @@ local function executeReturnHome()
 
     end
 
-    recoveryMode = true
+    recoveryMode =
+        true
 
     state.resetRuntime()
 
     -- ========================================================
-    -- ORIENTACIÓN
+    -- RECUPERAR POSICION / ORIENTACION
     -- ========================================================
 
     local orientationOK,
@@ -627,7 +768,8 @@ local function executeReturnHome()
 
     if not orientationOK then
 
-        recoveryMode = false
+        recoveryMode =
+            false
 
         return false,
             orientationError
@@ -642,12 +784,14 @@ local function executeReturnHome()
     -- REGRESAR
     -- ========================================================
 
-    local ok, err =
+    local ok,
+        err =
         jobs.returnHome()
 
     if not ok then
 
-        recoveryMode = false
+        recoveryMode =
+            false
 
         return false,
             err
@@ -656,7 +800,8 @@ local function executeReturnHome()
 
     settleAfterParking()
 
-    recoveryMode = false
+    recoveryMode =
+        false
 
     return true
 
@@ -676,7 +821,8 @@ local function recoverPendingReturn()
 
     end
 
-    recoveryMode = true
+    recoveryMode =
+        true
 
     print("")
     print("==============================")
@@ -685,22 +831,30 @@ local function recoverPendingReturn()
 
     if
         state.currentIndex
+
         and
+
         state.assignment
+
         and
+
         state.assignment.endIndex
+
         and
+
         state.currentIndex
         >
         state.assignment.endIndex
     then
 
+        print("")
         print(
             "Trabajo ya completado."
         )
 
     else
 
+        print("")
         print(
             "Regreso HOME interrumpido."
         )
@@ -712,7 +866,8 @@ local function recoverPendingReturn()
         "Reanudando regreso..."
     )
 
-    local ok, err =
+    local ok,
+        err =
         executeReturnHome()
 
     if not ok then
@@ -722,11 +877,13 @@ local function recoverPendingReturn()
         print("    ERROR REGRESANDO HOME")
         print("==============================")
 
+        print("")
         print(
             tostring(err)
         )
 
-        recoveryMode = false
+        recoveryMode =
+            false
 
         return true
 
@@ -737,7 +894,8 @@ local function recoverPendingReturn()
         "Regreso recuperado."
     )
 
-    recoveryMode = false
+    recoveryMode =
+        false
 
     return true
 
@@ -757,7 +915,8 @@ local function handlePreviousJob()
 
     end
 
-    recoveryMode = true
+    recoveryMode =
+        true
 
     print("")
     print("==============================")
@@ -787,8 +946,18 @@ local function handlePreviousJob()
         config.BATCH_BLOCK_LIMIT
     )
 
+    print(
+        "Restantes:",
+        state.assignment.endIndex
+        -
+        state.currentIndex
+        +
+        1
+    )
+
     if state.home then
 
+        print("")
         print(
             "HOME:",
             state.home.x,
@@ -823,14 +992,16 @@ local function handlePreviousJob()
 
         state.save()
 
-        recoveryMode = false
+        recoveryMode =
+            false
 
         print("")
         print(
             "Reanudando trabajo..."
         )
 
-        local ok, err =
+        local ok,
+            err =
             jobs.run()
 
         if not ok then
@@ -840,6 +1011,7 @@ local function handlePreviousJob()
             print("      TRABAJO DETENIDO")
             print("==============================")
 
+            print("")
             print(
                 tostring(err)
             )
@@ -855,7 +1027,7 @@ local function handlePreviousJob()
     end
 
     -- ========================================================
-    -- HOME
+    -- REGRESAR HOME
     -- ========================================================
 
     if option == "3" then
@@ -867,26 +1039,32 @@ local function handlePreviousJob()
                 "No existe HOME guardado."
             )
 
-            recoveryMode = false
+            recoveryMode =
+                false
 
             return true
 
         end
 
-        local ok, err =
+        local ok,
+            err =
             executeReturnHome()
 
         if not ok then
 
             print("")
             print(
-                "Error regresando HOME:",
+                "Error regresando HOME:"
+            )
+
+            print(
                 tostring(err)
             )
 
         end
 
-        recoveryMode = false
+        recoveryMode =
+            false
 
         return true
 
@@ -903,17 +1081,20 @@ local function handlePreviousJob()
 
     state.clearJob()
 
-    recoveryMode = false
+    recoveryMode =
+        false
 
     return false
 
 end
 
 -- ============================================================
--- ACEPTAR ASIGNACIÓN
+-- ACEPTAR ASIGNACION
 -- ============================================================
 
-local function acceptAssignment(msg)
+local function acceptAssignment(
+    msg
+)
 
     local valid,
         validationError =
@@ -928,6 +1109,7 @@ local function acceptAssignment(msg)
         print("     ASIGNACION RECHAZADA")
         print("==============================")
 
+        print("")
         print(
             tostring(
                 validationError
@@ -939,16 +1121,14 @@ local function acceptAssignment(msg)
     end
 
     -- ========================================================
-    -- PROTECCIÓN ADICIONAL
-    --
-    -- Nunca sobrescribimos un trabajo activo.
+    -- NO SOBRESCRIBIR TRABAJO ACTIVO
     -- ========================================================
 
     if state.hasActiveJob() then
 
         print("")
         print(
-            "Asignación ignorada:"
+            "Asignacion ignorada:"
         )
 
         print(
@@ -959,6 +1139,10 @@ local function acceptAssignment(msg)
 
     end
 
+    -- ========================================================
+    -- MODO POR DEFECTO
+    -- ========================================================
+
     if not msg.buildMode then
 
         msg.buildMode =
@@ -967,25 +1151,33 @@ local function acceptAssignment(msg)
     end
 
     -- ========================================================
-    -- GUARDAR
+    -- GUARDAR ASIGNACION
     -- ========================================================
 
     state.setAssignment(
         msg
     )
 
-    -- HOME de cada trabajo =
-    -- posición donde recibió esa asignación.
-    state.home = nil
+    -- HOME se capturara donde la turtle
+    -- reciba este trabajo.
+
+    state.home =
+        nil
 
     state.resetRuntime()
 
     state.save()
 
+    -- ========================================================
+    -- INFORMACION
+    -- ========================================================
+
     print("")
     print("==============================")
     print("       TRABAJO RECIBIDO")
     print("==============================")
+
+    print("")
 
     print(
         "Bloques:",
@@ -1006,7 +1198,7 @@ local function acceptAssignment(msg)
 
     print("")
     print(
-        "Material station:"
+        "Materiales:"
     )
 
     if msg.materialStation then
@@ -1027,7 +1219,7 @@ local function acceptAssignment(msg)
 
     print("")
     print(
-        "Fuel station:"
+        "Combustible:"
     )
 
     print(
@@ -1040,7 +1232,7 @@ local function acceptAssignment(msg)
 
         print("")
         print(
-            "Unload station:"
+            "Descarga:"
         )
 
         print(
@@ -1051,12 +1243,31 @@ local function acceptAssignment(msg)
 
     end
 
+    print("")
+    print(
+        "Capacidad tanda:",
+        config.BATCH_BLOCK_LIMIT
+    )
+
+    if
+        msg.buildMode
+        ==
+        config.BUILD_MODES.REPLACE
+    then
+
+        print(
+            "Slot reservado:",
+            config.RESERVED_SLOT
+        )
+
+    end
+
     return true
 
 end
 
 -- ============================================================
--- ESPERAR ASIGNACIÓN
+-- ESPERAR ASIGNACION
 -- ============================================================
 
 local function waitForAssignment()
@@ -1072,24 +1283,39 @@ local function waitForAssignment()
 
     while running do
 
-        local id, msg =
+        local id,
+            msg =
             protocol.receive(
                 2
             )
 
         if
             id
+
             and
+
             protocol.centralID
+
             and
-            id ==
+
+            id
+            ==
             protocol.centralID
+
             and
-            type(msg) == "table"
+
+            type(msg)
+            ==
+            "table"
         then
 
+            -- =================================================
+            -- NUEVO TRABAJO
+            -- =================================================
+
             if
-                msg.type ==
+                msg.type
+                ==
                 protocol.MESSAGE.ASSIGN
             then
 
@@ -1120,7 +1346,7 @@ local function waitForAssignment()
 end
 
 -- ============================================================
--- EJECUTAR TRABAJO
+-- EJECUTAR TRABAJO ACTUAL
 -- ============================================================
 
 local function runCurrentJob()
@@ -1128,7 +1354,7 @@ local function runCurrentJob()
     state.resetRuntime()
 
     -- ========================================================
-    -- ORIENTACIÓN
+    -- POSICION / ORIENTACION
     -- ========================================================
 
     local orientationOK,
@@ -1173,7 +1399,8 @@ local function runCurrentJob()
     -- EJECUTAR
     -- ========================================================
 
-    local ok, err =
+    local ok,
+        err =
         jobs.run()
 
     if not ok then
@@ -1182,6 +1409,14 @@ local function runCurrentJob()
             err
 
     end
+
+    -- jobs.complete() ya hizo:
+    --
+    -- descarga final
+    -- COMPLETE
+    -- regreso HOME
+    --
+    -- Aqui solo limpiamos flags runtime.
 
     settleAfterParking()
 
@@ -1201,13 +1436,9 @@ local function heartbeatLoop()
             protocol.centralID
 
         -- ====================================================
-        -- DESCUBRIR CENTRAL DE NUEVO
+        -- REDESCUBRIR CENTRAL
         --
-        -- Esto permite:
-        --
-        -- - central reiniciada
-        -- - central sustituida
-        -- - cambio de computer ID
+        -- Permite sobrevivir a un reboot de la Central.
         -- ====================================================
 
         local discovered =
@@ -1219,7 +1450,7 @@ local function heartbeatLoop()
                 discovered
 
             -- =================================================
-            -- CENTRAL NUEVA / CAMBIADA
+            -- CENTRAL NUEVA / REINICIADA
             -- =================================================
 
             if
@@ -1238,22 +1469,14 @@ local function heartbeatLoop()
 
             end
 
-            -- =================================================
-            -- HEARTBEAT
-            --
-            -- El estado evita que una central recién
-            -- reiniciada considere libre una turtle ocupada.
-            -- =================================================
-
             protocol.sendHeartbeat(
                 getHeartbeatStatus()
             )
 
         else
 
-            -- No descartamos inmediatamente el trabajo.
-            -- Simplemente dejamos de enviar hasta
-            -- reencontrar una central.
+            -- No eliminamos el trabajo local.
+            -- Solo dejamos de enviar mensajes.
 
             protocol.centralID =
                 nil
@@ -1269,19 +1492,52 @@ local function heartbeatLoop()
 end
 
 -- ============================================================
--- MAIN DEL WORKER
+-- CARGAR ESTADO
 -- ============================================================
 
-local function workerLoop()
+local function loadPreviousState()
 
-    -- ========================================================
-    -- CARGAR
-    -- ========================================================
+    local loaded,
+        loadError =
+        state.load()
 
-    if state.load() then
+    if loaded then
 
         print(
             "Estado anterior cargado."
+        )
+
+        if state.assignment then
+
+            print(
+                "Indice:",
+                state.currentIndex
+                or
+                "-"
+            )
+
+            print(
+                "Tanda:",
+                state.blocksThisBatch,
+                "/",
+                config.BATCH_BLOCK_LIMIT
+            )
+
+        end
+
+        return true
+
+    end
+
+    if
+        loadError
+        ~=
+        "SIN_ESTADO_GUARDADO"
+    then
+
+        print(
+            "Estado no cargado:",
+            tostring(loadError)
         )
 
     else
@@ -1292,8 +1548,24 @@ local function workerLoop()
 
     end
 
+    return false
+
+end
+
+-- ============================================================
+-- MAIN DEL WORKER
+-- ============================================================
+
+local function workerLoop()
+
     -- ========================================================
-    -- CONECTAR
+    -- CARGAR ESTADO
+    -- ========================================================
+
+    loadPreviousState()
+
+    -- ========================================================
+    -- CONECTAR A CENTRAL
     -- ========================================================
 
     local connected,
@@ -1311,7 +1583,7 @@ local function workerLoop()
     end
 
     -- ========================================================
-    -- RETURN INTERRUMPIDO
+    -- REGRESO INTERRUMPIDO
     -- ========================================================
 
     recoverPendingReturn()
@@ -1333,7 +1605,8 @@ local function workerLoop()
 
         if assigned then
 
-            local ok, err =
+            local ok,
+                err =
                 runCurrentJob()
 
             if not ok then
@@ -1343,6 +1616,7 @@ local function workerLoop()
                 print("      TRABAJO DETENIDO")
                 print("==============================")
 
+                print("")
                 print(
                     tostring(err)
                 )
@@ -1350,12 +1624,15 @@ local function workerLoop()
                 state.save()
 
                 -- =============================================
-                -- REGRESO DE SEGURIDAD
+                -- SI EL ERROR SE PRODUJO DURANTE
+                -- RETURN_HOME, intentamos completar regreso.
                 -- =============================================
 
                 if
                     state.returnRequested
+
                     and
+
                     state.hasHome()
                 then
 
@@ -1371,7 +1648,10 @@ local function workerLoop()
                     if not homeOK then
 
                         print(
-                            "No pude regresar:",
+                            "No pude regresar:"
+                        )
+
+                        print(
                             tostring(
                                 homeError
                             )
@@ -1383,7 +1663,7 @@ local function workerLoop()
 
                 print("")
                 print(
-                    "Worker continúa activo."
+                    "Worker continua activo."
                 )
 
             end

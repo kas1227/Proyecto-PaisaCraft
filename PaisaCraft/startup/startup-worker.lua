@@ -3,6 +3,9 @@
 -- STARTUP WORKER
 -- ============================================================
 
+local WORKER =
+    "/PaisaCraft/worker.lua"
+
 term.clear()
 term.setCursorPos(1, 1)
 
@@ -15,11 +18,12 @@ print("Iniciando worker...")
 
 sleep(1)
 
-if not fs.exists("worker.lua") then
+if not fs.exists(WORKER) then
 
     print("")
     print("ERROR:")
-    print("worker.lua no existe.")
+    print("No existe:")
+    print(WORKER)
 
     return
 
@@ -30,7 +34,7 @@ local ok, err =
         function()
 
             shell.run(
-                "worker.lua"
+                WORKER
             )
 
         end

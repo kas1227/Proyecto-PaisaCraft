@@ -8,14 +8,55 @@ local ROOT =
 
 local DATA_DIR =
     ROOT
-    .. "/data"
+    ..
+    "/data"
 
 local SETTINGS_FILE =
     DATA_DIR
-    .. "/settings.cfg"
+    ..
+    "/settings.cfg"
 
 local STARTUP_TARGET =
     "/startup.lua"
+
+-- ============================================================
+-- STARTUPS
+-- ============================================================
+
+local STARTUPS = {
+
+    WORKER =
+        ROOT
+        ..
+        "/startup/startup-worker.lua",
+
+    CENTRAL =
+        ROOT
+        ..
+        "/startup/startup-central.lua",
+
+    MONITOR =
+        ROOT
+        ..
+        "/startup/startup-monitor.lua"
+
+}
+
+-- ============================================================
+-- ASEGURAR DIRECTORIO
+-- ============================================================
+
+local function ensureDirectory(path)
+
+    if fs.exists(path) then
+        return true
+    end
+
+    fs.makeDir(path)
+
+    return fs.exists(path)
+
+end
 
 -- ============================================================
 -- GUARDAR TABLA
@@ -27,19 +68,15 @@ local function saveTable(
 )
 
     local directory =
-        fs.getDir(
-            filename
-        )
+        fs.getDir(filename)
 
     if
         directory
         and
         directory ~= ""
-        and
-        not fs.exists(directory)
     then
 
-        fs.makeDir(
+        ensureDirectory(
             directory
         )
 
@@ -54,7 +91,7 @@ local function saveTable(
     if not file then
 
         return false,
-            "No puedo escribir "
+            "No puedo escribir: "
             ..
             filename
 
@@ -73,41 +110,58 @@ local function saveTable(
 end
 
 -- ============================================================
--- OBTENER STARTUP SEGUN ROL
+-- COMPROBAR PAISACRAFT
 -- ============================================================
 
-local function getStartupSource(
-    role
-)
+local function checkProject()
 
-    if role == "WORKER" then
+    if not fs.exists(ROOT) then
 
-        return
-            ROOT
+        return false,
+            "No existe "
             ..
-            "/startup/startup-worker.lua"
+            ROOT
 
     end
 
-    if role == "CENTRAL" then
+    local required = {
 
-        return
-            ROOT
-            ..
-            "/startup/startup-central.lua"
+        ROOT
+        ..
+        "/worker.lua",
+
+        ROOT
+        ..
+        "/central.lua",
+
+        ROOT
+        ..
+        "/monitor.lua",
+
+        STARTUPS.WORKER,
+
+        STARTUPS.CENTRAL,
+
+        STARTUPS.MONITOR
+
+    }
+
+    for _, path
+        in ipairs(required)
+    do
+
+        if not fs.exists(path) then
+
+            return false,
+                "No existe "
+                ..
+                path
+
+        end
 
     end
 
-    if role == "MONITOR" then
-
-        return
-            ROOT
-            ..
-            "/startup/startup-monitor.lua"
-
-    end
-
-    return nil
+    return true
 
 end
 
@@ -120,9 +174,7 @@ local function installStartup(
 )
 
     local source =
-        getStartupSource(
-            role
-        )
+        STARTUPS[role]
 
     if not source then
 
@@ -132,8 +184,13 @@ local function installStartup(
     end
 
     print("")
-    print("Startup origen:")
-    print(source)
+    print(
+        "Startup origen:"
+    )
+
+    print(
+        source
+    )
 
     if not fs.exists(source) then
 
@@ -143,6 +200,10 @@ local function installStartup(
             source
 
     end
+
+    -- ========================================================
+    -- QUITAR STARTUP ANTERIOR
+    -- ========================================================
 
     if fs.exists(
         STARTUP_TARGET
@@ -155,15 +216,18 @@ local function installStartup(
 
     end
 
+    -- ========================================================
+    -- COPIAR
+    -- ========================================================
+
     fs.copy(
         source,
         STARTUP_TARGET
     )
 
-    if
-        not fs.exists(
-            STARTUP_TARGET
-        )
+    if not fs.exists(
+        STARTUP_TARGET
+    )
     then
 
         return false,
@@ -178,24 +242,16 @@ local function installStartup(
 end
 
 -- ============================================================
--- GUARDAR SETTINGS
+-- GUARDAR CONFIGURACIÓN
 -- ============================================================
 
 local function saveSettings(
     role
 )
 
-    if
-        not fs.exists(
-            DATA_DIR
-        )
-    then
-
-        fs.makeDir(
-            DATA_DIR
-        )
-
-    end
+    ensureDirectory(
+        DATA_DIR
+    )
 
     return saveTable(
 
@@ -210,6 +266,7 @@ local function saveSettings(
 
             root =
                 ROOT
+
         }
 
     )
@@ -235,6 +292,35 @@ local function installRole(
         role
     )
 
+    -- ========================================================
+    -- COMPROBAR PROYECTO
+    -- ========================================================
+
+    local projectOK,
+        projectError =
+        checkProject()
+
+    if not projectOK then
+
+        print("")
+        print(
+            "ERROR:"
+        )
+
+        print(
+            tostring(
+                projectError
+            )
+        )
+
+        return false
+
+    end
+
+    -- ========================================================
+    -- INSTALAR STARTUP
+    -- ========================================================
+
     local startupOK,
         startupError =
         installStartup(
@@ -257,6 +343,10 @@ local function installRole(
         return false
 
     end
+
+    -- ========================================================
+    -- SETTINGS
+    -- ========================================================
 
     local settingsOK,
         settingsError =
@@ -281,6 +371,10 @@ local function installRole(
 
     end
 
+    -- ========================================================
+    -- COMPLETO
+    -- ========================================================
+
     print("")
     print("==============================")
     print("     INSTALACION COMPLETA")
@@ -299,7 +393,11 @@ local function installRole(
 
     print("")
     print(
-        "/startup.lua creado."
+        "Startup:"
+    )
+
+    print(
+        STARTUP_TARGET
     )
 
     print("")
@@ -317,10 +415,11 @@ local function installRole(
 end
 
 -- ============================================================
--- MAIN
+-- MENU
 -- ============================================================
 
 term.clear()
+
 term.setCursorPos(
     1,
     1
@@ -329,6 +428,15 @@ term.setCursorPos(
 print("==============================")
 print("       PAISACRAFT INSTALL")
 print("==============================")
+
+print("")
+print(
+    "Ruta:"
+)
+
+print(
+    ROOT
+)
 
 print("")
 print(

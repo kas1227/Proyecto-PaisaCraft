@@ -14,7 +14,7 @@ local SETTINGS_FILE =
     DATA_DIR
     .. "/settings.cfg"
 
-local STARTUP_FILE =
+local STARTUP_TARGET =
     "/startup.lua"
 
 -- ============================================================
@@ -73,7 +73,7 @@ local function saveTable(
 end
 
 -- ============================================================
--- OBTENER STARTUP DEL ROL
+-- OBTENER STARTUP SEGUN ROL
 -- ============================================================
 
 local function getStartupSource(
@@ -132,17 +132,8 @@ local function installStartup(
     end
 
     print("")
-    print(
-        "Startup origen:"
-    )
-
-    print(
-        source
-    )
-
-    -- ========================================================
-    -- COMPROBAR ARCHIVO
-    -- ========================================================
+    print("Startup origen:")
+    print(source)
 
     if not fs.exists(source) then
 
@@ -153,38 +144,32 @@ local function installStartup(
 
     end
 
-    -- ========================================================
-    -- BORRAR STARTUP ANTERIOR
-    -- ========================================================
-
     if fs.exists(
-        STARTUP_FILE
+        STARTUP_TARGET
     )
     then
 
         fs.delete(
-            STARTUP_FILE
+            STARTUP_TARGET
         )
 
     end
 
-    -- ========================================================
-    -- COPIAR
-    -- ========================================================
-
     fs.copy(
         source,
-        STARTUP_FILE
+        STARTUP_TARGET
     )
 
     if
         not fs.exists(
-            STARTUP_FILE
+            STARTUP_TARGET
         )
     then
 
         return false,
-            "No se pudo crear /startup.lua"
+            "No se pudo crear "
+            ..
+            STARTUP_TARGET
 
     end
 
@@ -193,7 +178,7 @@ local function installStartup(
 end
 
 -- ============================================================
--- GUARDAR CONFIGURACIÓN
+-- GUARDAR SETTINGS
 -- ============================================================
 
 local function saveSettings(
@@ -212,24 +197,20 @@ local function saveSettings(
 
     end
 
-    local data = {
-
-        role =
-            role,
-
-        computerID =
-            os.getComputerID(),
-
-        root =
-            ROOT
-
-    }
-
     return saveTable(
 
         SETTINGS_FILE,
 
-        data
+        {
+            role =
+                role,
+
+            computerID =
+                os.getComputerID(),
+
+            root =
+                ROOT
+        }
 
     )
 
@@ -254,10 +235,6 @@ local function installRole(
         role
     )
 
-    -- ========================================================
-    -- STARTUP
-    -- ========================================================
-
     local startupOK,
         startupError =
         installStartup(
@@ -281,10 +258,6 @@ local function installRole(
 
     end
 
-    -- ========================================================
-    -- SETTINGS
-    -- ========================================================
-
     local settingsOK,
         settingsError =
         saveSettings(
@@ -307,10 +280,6 @@ local function installRole(
         return false
 
     end
-
-    -- ========================================================
-    -- COMPLETADO
-    -- ========================================================
 
     print("")
     print("==============================")
@@ -352,7 +321,6 @@ end
 -- ============================================================
 
 term.clear()
-
 term.setCursorPos(
     1,
     1

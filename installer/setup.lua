@@ -4,10 +4,10 @@
 -- ============================================================
 
 local GITHUB_USER =
-    "TU_USUARIO"
+    "kas1227"
 
 local GITHUB_REPO =
-    "Proyecto-Tortugas-Breteadoras"
+    "Proyecto-PaisaCraft"
 
 local GITHUB_BRANCH =
     "main"

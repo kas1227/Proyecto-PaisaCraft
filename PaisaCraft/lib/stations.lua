@@ -1,6 +1,6 @@
 -- ============================================================
 -- PAISACRAFT
--- ESTACIONES v6.1.3
+-- ESTACIONES v6.1.5
 -- ============================================================
 
 local config =
@@ -27,18 +27,15 @@ local fuel =
 local stations = {}
 
 -- ============================================================
--- CALLBACK CONTROL
+-- CALLBACK DE CONTROL
 -- ============================================================
 
 local controlCallback = nil
 
 
-function stations.setControlCallback(
-    callback
-)
+function stations.setControlCallback(callback)
 
-    controlCallback =
-        callback
+    controlCallback = callback
 
 end
 
@@ -47,9 +44,7 @@ local function checkControl(msg)
 
     if controlCallback then
 
-        return controlCallback(
-            msg
-        )
+        return controlCallback(msg)
 
     end
 
@@ -58,7 +53,7 @@ local function checkControl(msg)
 end
 
 -- ============================================================
--- MODO
+-- MODO ACTUAL
 -- ============================================================
 
 local function getBuildMode()
@@ -69,28 +64,44 @@ local function getBuildMode()
         state.assignment.buildMode
     then
 
-        return
-            state.assignment.buildMode
+        return state.assignment.buildMode
 
     end
 
-    return
-        config.DEFAULT_BUILD_MODE
+    return config.DEFAULT_BUILD_MODE
 
 end
 
+-- ============================================================
+-- ¿NECESITA MATERIALES?
+-- ============================================================
 
 local function needsMaterials()
 
     return
         getBuildMode()
-        ~=
-        config.BUILD_MODES.CLEAR
+        ~= config.BUILD_MODES.CLEAR
 
 end
 
 -- ============================================================
--- CANCELAR TODAS LAS RESERVAS
+-- ¿USA DESCARGA?
+-- ============================================================
+
+local function usesUnloadStation()
+
+    local mode =
+        getBuildMode()
+
+    return
+        mode == config.BUILD_MODES.REPLACE
+        or
+        mode == config.BUILD_MODES.CLEAR
+
+end
+
+-- ============================================================
+-- CANCELAR RESERVAS
 -- ============================================================
 
 function stations.cancelReservations()
@@ -105,7 +116,7 @@ function stations.cancelReservations()
 end
 
 -- ============================================================
--- PERMISO GENÉRICO
+-- ESPERAR PERMISO DE ESTACIÓN
 -- ============================================================
 
 local function waitForPermission(
@@ -124,9 +135,7 @@ local function waitForPermission(
         })
 
         local id, msg =
-            protocol.receiveCentral(
-                3
-            )
+            protocol.receiveCentral(3)
 
         if
             id
@@ -141,17 +150,13 @@ local function waitForPermission(
             elseif msg.type == waitType then
 
                 print(
-                    "Cola:",
-                    msg.position
-                    or
-                    "?"
+                    "Esperando turno. Cola:",
+                    msg.position or "?"
                 )
 
             else
 
-                checkControl(
-                    msg
-                )
+                checkControl(msg)
 
             end
 
@@ -228,9 +233,7 @@ end
 -- IR A ESTACIÓN
 -- ============================================================
 
-local function goToStation(
-    position
-)
+local function goToStation(position)
 
     if not position then
 
@@ -257,7 +260,46 @@ local function goToStation(
 end
 
 -- ============================================================
--- SALIR
+-- LIBERAR ESTACIONES
+-- ============================================================
+
+local function finishMaterial()
+
+    protocol.send({
+
+        type =
+            protocol.MESSAGE.MATERIAL_DONE
+
+    })
+
+end
+
+
+local function finishFuel()
+
+    protocol.send({
+
+        type =
+            protocol.MESSAGE.FUEL_DONE
+
+    })
+
+end
+
+
+local function finishUnload()
+
+    protocol.send({
+
+        type =
+            protocol.MESSAGE.UNLOAD_DONE
+
+    })
+
+end
+
+-- ============================================================
+-- SALIR DE ESTACIÓN
 -- ============================================================
 
 function stations.leaveStation()
@@ -271,11 +313,7 @@ function stations.leaveStation()
             return true
         end
 
-        if
-            reason
-            ~=
-            "BLOQUEADO"
-        then
+        if reason ~= "BLOQUEADO" then
 
             return false,
                 reason
@@ -283,7 +321,7 @@ function stations.leaveStation()
         end
 
         print(
-            "Salida de estación bloqueada..."
+            "Salida bloqueada..."
         )
 
         sleep(0.25)
@@ -307,34 +345,25 @@ function stations.leaveStation()
 end
 
 -- ============================================================
--- LIBERAR DESCARGA
+-- DESCARGAR MATERIAL RETIRADO
+--
+-- SLOT 16:
+-- exclusivamente para bloques/items retirados.
 -- ============================================================
 
-local function finishUnload()
+function stations.unloadRemovedItems()
 
-    protocol.send({
+    -- Nada que descargar.
 
-        type =
-            protocol.MESSAGE.UNLOAD_DONE
+    if
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+        == 0
+    then
 
-    })
-
-end
-
--- ============================================================
--- DESCARGA SIMPLE
--- ============================================================
-
-function stations.unloadOnly(
-    returnAfter
-)
-
-    if not config.AUTO_UNLOAD then
         return true
-    end
 
-    if inventory.isReservedEmpty() then
-        return true
     end
 
     if not state.assignment then
@@ -354,26 +383,21 @@ function stations.unloadOnly(
 
     end
 
-    local returnPosition = nil
-    local returnDirection = nil
-
-    if returnAfter then
-
-        returnPosition =
-            state.getPosition()
-
-        returnDirection =
-            state.getDirection()
-
-    end
-
     print("")
     print("==============================")
-    print("           DESCARGA")
+    print("          DESCARGA")
     print("==============================")
 
+    print("")
+    print(
+        "Items:",
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+    )
+
     -- ========================================================
-    -- SOLICITAR TURNO
+    -- PEDIR TURNO
     -- ========================================================
 
     local permissionOK,
@@ -388,14 +412,12 @@ function stations.unloadOnly(
     end
 
     -- ========================================================
-    -- IR
+    -- IR A DESCARGA
     -- ========================================================
 
     local navigationOK,
         navigationError =
-        goToStation(
-            station
-        )
+        goToStation(station)
 
     if not navigationOK then
 
@@ -407,7 +429,7 @@ function stations.unloadOnly(
     end
 
     -- ========================================================
-    -- RECONFIRMAR RESERVA
+    -- CONFIRMAR RESERVA
     -- ========================================================
 
     local confirmOK,
@@ -424,16 +446,44 @@ function stations.unloadOnly(
     end
 
     -- ========================================================
-    -- VACIAR SLOT 16
+    -- SLOT 16
+    -- ========================================================
+
+    turtle.select(
+        config.RESERVED_SLOT
+    )
+
+    -- ========================================================
+    -- DESCARGAR HACIA ARRIBA
+    --
+    -- En el punto de descarga habrá un sistema
+    -- que reciba/extráiga los items.
     -- ========================================================
 
     while
-        not inventory.isReservedEmpty()
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+        > 0
     do
 
-        inventory.selectReservedSlot()
+        local before =
+            turtle.getItemCount(
+                config.RESERVED_SLOT
+            )
 
-        if not turtle.dropUp() then
+        turtle.dropUp()
+
+        local after =
+            turtle.getItemCount(
+                config.RESERVED_SLOT
+            )
+
+        -- ====================================================
+        -- VERIFICAR SI REALMENTE SALIERON ITEMS
+        -- ====================================================
+
+        if after >= before then
 
             print(
                 "Esperando espacio de descarga..."
@@ -444,6 +494,10 @@ function stations.unloadOnly(
             )
 
         end
+
+        -- ====================================================
+        -- CONTROL
+        -- ====================================================
 
         if not checkControl() then
 
@@ -465,8 +519,31 @@ function stations.unloadOnly(
 
     end
 
+    -- ========================================================
+    -- VERIFICACIÓN FINAL
+    -- ========================================================
+
+    if
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+        ~= 0
+    then
+
+        finishUnload()
+
+        return false,
+            "DESCARGA_INCOMPLETA"
+
+    end
+
+    print("")
     print(
-        "Descarga completada."
+        "Descarga completa."
+    )
+
+    print(
+        "Slot 16 libre."
     )
 
     -- ========================================================
@@ -477,9 +554,6 @@ function stations.unloadOnly(
         leaveError =
         stations.leaveStation()
 
-    -- Liberamos cuando la turtle ya ha intentado
-    -- abandonar físicamente el punto.
-
     finishUnload()
 
     if not leaveOK then
@@ -489,8 +563,55 @@ function stations.unloadOnly(
 
     end
 
+    return true
+
+end
+
+-- ============================================================
+-- DESCARGA COMPATIBLE CON BUILDER
+--
+-- builder.lua ya utiliza unloadOnly().
+-- Mantenemos esta función para no romperlo.
+-- ============================================================
+
+function stations.unloadOnly(returnAfter)
+
+    if
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+        == 0
+    then
+
+        return true
+
+    end
+
+    local returnPosition = nil
+    local returnDirection = nil
+
+    if returnAfter then
+
+        returnPosition =
+            state.getPosition()
+
+        returnDirection =
+            state.getDirection()
+
+    end
+
+    local ok, err =
+        stations.unloadRemovedItems()
+
+    if not ok then
+
+        return false,
+            err
+
+    end
+
     -- ========================================================
-    -- REGRESAR
+    -- VOLVER AL PUNTO ANTERIOR
     -- ========================================================
 
     if
@@ -498,11 +619,6 @@ function stations.unloadOnly(
         and
         returnPosition
     then
-
-        print("")
-        print(
-            "Regresando al trabajo..."
-        )
 
         local returnOK,
             returnError =
@@ -543,12 +659,10 @@ function stations.unloadOnly(
 end
 
 -- ============================================================
--- REPOSTAR DESDE COFRE
+-- CONSUMIR COMBUSTIBLE DEL INVENTARIO
 -- ============================================================
 
-function stations.refuelFromChest(
-    targetFuel
-)
+function stations.refuelFromChest(targetFuel)
 
     targetFuel =
         targetFuel
@@ -574,10 +688,12 @@ function stations.refuelFromChest(
 
         end
 
+        -- ====================================================
+        -- SLOT 16 JAMÁS SE UTILIZA
+        -- ====================================================
+
         local ok, reason =
-            inventory.collectFuelUp(
-                16
-            )
+            inventory.collectFuelUp(16)
 
         if ok then
 
@@ -610,11 +726,15 @@ function stations.refuelFromChest(
         end
 
         if not checkControl() then
+
             return false
+
         end
 
         if state.returnRequested then
+
             return false
+
         end
 
     end
@@ -622,27 +742,10 @@ function stations.refuelFromChest(
 end
 
 -- ============================================================
--- LIBERAR FUEL
+-- REPOSTAR
 -- ============================================================
 
-local function finishFuel()
-
-    protocol.send({
-
-        type =
-            protocol.MESSAGE.FUEL_DONE
-
-    })
-
-end
-
--- ============================================================
--- FUEL
--- ============================================================
-
-function stations.refuel(
-    targetFuel
-)
+function stations.refuel(targetFuel)
 
     if not state.assignment then
 
@@ -671,6 +774,10 @@ function stations.refuel(
     print("        COMBUSTIBLE")
     print("==============================")
 
+    -- ========================================================
+    -- PEDIR TURNO
+    -- ========================================================
+
     local permissionOK,
         permissionError =
         stations.requestFuel()
@@ -682,11 +789,13 @@ function stations.refuel(
 
     end
 
+    -- ========================================================
+    -- IR
+    -- ========================================================
+
     local navigationOK,
         navigationError =
-        goToStation(
-            station
-        )
+        goToStation(station)
 
     if not navigationOK then
 
@@ -697,7 +806,9 @@ function stations.refuel(
 
     end
 
-    -- Reconfirmar.
+    -- ========================================================
+    -- CONFIRMAR
+    -- ========================================================
 
     local confirmOK,
         confirmError =
@@ -712,15 +823,20 @@ function stations.refuel(
 
     end
 
+    print("")
+    print(
+        "Fuel actual:",
+        movement.getFuelLevel()
+    )
+
     print(
         "Objetivo:",
         targetFuel
     )
 
-    print(
-        "Actual:",
-        movement.getFuelLevel()
-    )
+    -- ========================================================
+    -- REPOSTAR
+    -- ========================================================
 
     local fuelOK =
         stations.refuelFromChest(
@@ -741,6 +857,10 @@ function stations.refuel(
         movement.getFuelLevel()
     )
 
+    -- ========================================================
+    -- SALIR
+    -- ========================================================
+
     local leaveOK,
         leaveError =
         stations.leaveStation()
@@ -759,22 +879,7 @@ function stations.refuel(
 end
 
 -- ============================================================
--- LIBERAR MATERIAL
--- ============================================================
-
-local function finishMaterial()
-
-    protocol.send({
-
-        type =
-            protocol.MESSAGE.MATERIAL_DONE
-
-    })
-
-end
-
--- ============================================================
--- MATERIALES
+-- CARGAR MATERIALES
 -- ============================================================
 
 function stations.collectMaterials()
@@ -805,6 +910,10 @@ function stations.collectMaterials()
     print("         MATERIALES")
     print("==============================")
 
+    -- ========================================================
+    -- PEDIR TURNO
+    -- ========================================================
+
     local permissionOK,
         permissionError =
         stations.requestMaterial()
@@ -816,11 +925,13 @@ function stations.collectMaterials()
 
     end
 
+    -- ========================================================
+    -- IR
+    -- ========================================================
+
     local navigationOK,
         navigationError =
-        goToStation(
-            station
-        )
+        goToStation(station)
 
     if not navigationOK then
 
@@ -831,7 +942,9 @@ function stations.collectMaterials()
 
     end
 
-    -- Reconfirmar.
+    -- ========================================================
+    -- CONFIRMAR
+    -- ========================================================
 
     local confirmOK,
         confirmError =
@@ -845,6 +958,13 @@ function stations.collectMaterials()
             confirmError
 
     end
+
+    -- ========================================================
+    -- IMPORTANTE
+    --
+    -- inventory.collectBuildMaterialsUp()
+    -- solo utiliza slots 1-15.
+    -- ========================================================
 
     inventory.collectBuildMaterialsUp()
 
@@ -882,10 +1002,35 @@ function stations.collectMaterials()
 
     end
 
+    print("")
     print(
         "Materiales:",
         inventory.countBuildMaterials()
     )
+
+    -- ========================================================
+    -- SLOT 16 DEBE PERMANECER LIBRE
+    -- ========================================================
+
+    if
+        usesUnloadStation()
+        and
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+        > 0
+    then
+
+        finishMaterial()
+
+        return false,
+            "SLOT_16_OCUPADO_TRAS_CARGA"
+
+    end
+
+    -- ========================================================
+    -- SALIR
+    -- ========================================================
 
     local leaveOK,
         leaveError =
@@ -910,9 +1055,7 @@ end
 -- RESTOCK COMPLETO
 -- ============================================================
 
-function stations.fullRestock(
-    returnAfter
-)
+function stations.fullRestock(returnAfter)
 
     if not state.assignment then
 
@@ -934,24 +1077,62 @@ function stations.fullRestock(
 
     end
 
+    local mode =
+        getBuildMode()
+
+    print("")
+    print("==============================")
+    print("       CICLO DE SERVICIO")
+    print("==============================")
+
     -- ========================================================
-    -- 1. DESCARGA
+    -- PASO 1
+    -- DESCARGA
+    --
+    -- Solo REPLACE / CLEAR.
+    -- Solo si slot 16 contiene algo.
     -- ========================================================
 
     if
-        not inventory.isReservedEmpty()
+        (
+            mode ==
+            config.BUILD_MODES.REPLACE
+
+            or
+
+            mode ==
+            config.BUILD_MODES.CLEAR
+        )
+        and
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+        > 0
     then
 
-        local ok, err =
-            stations.unloadOnly(
-                false
-            )
+        print("")
+        print(
+            "1/3 Descargando..."
+        )
 
-        if not ok then
-            return false, err
+        local unloadOK,
+            unloadError =
+            stations.unloadRemovedItems()
+
+        if not unloadOK then
+
+            stations.cancelReservations()
+
+            return false,
+                unloadError
+
         end
 
     end
+
+    -- ========================================================
+    -- SEGURIDAD
+    -- ========================================================
 
     if state.returnRequested then
 
@@ -963,23 +1144,50 @@ function stations.fullRestock(
     end
 
     -- ========================================================
-    -- 2. FUEL OBJETIVO
+    -- VERIFICAR SLOT 16
     -- ========================================================
+
+    if
+        (
+            mode ==
+            config.BUILD_MODES.REPLACE
+
+            or
+
+            mode ==
+            config.BUILD_MODES.CLEAR
+        )
+        and
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+        ~= 0
+    then
+
+        return false,
+            "SLOT_16_NO_SE_DESCARGO"
+
+    end
+
+    -- ========================================================
+    -- PASO 2
+    -- COMBUSTIBLE
+    -- ========================================================
+
+    print("")
+    print(
+        "2/3 Repostando..."
+    )
 
     local targetFuel =
         fuel.calculateTarget(
             returnPosition
         )
 
-    print("")
     print(
         "Fuel calculado:",
         targetFuel
     )
-
-    -- ========================================================
-    -- 3. FUEL
-    -- ========================================================
 
     local fuelOK,
         fuelError =
@@ -996,6 +1204,10 @@ function stations.fullRestock(
 
     end
 
+    -- ========================================================
+    -- CONTROL
+    -- ========================================================
+
     if state.returnRequested then
 
         stations.cancelReservations()
@@ -1006,10 +1218,19 @@ function stations.fullRestock(
     end
 
     -- ========================================================
-    -- 4. MATERIAL
+    -- PASO 3
+    -- MATERIALES
+    --
+    -- PLACE / REPLACE.
+    -- CLEAR no necesita bloques.
     -- ========================================================
 
     if needsMaterials() then
+
+        print("")
+        print(
+            "3/3 Cargando materiales..."
+        )
 
         local materialOK,
             materialError =
@@ -1024,18 +1245,67 @@ function stations.fullRestock(
 
         end
 
+    else
+
+        print("")
+        print(
+            "3/3 Materiales no requeridos."
+        )
+
     end
 
     -- ========================================================
-    -- 5. NUEVA TANDA
+    -- VERIFICACIÓN FINAL DEL SLOT 16
+    -- ========================================================
+
+    if
+        (
+            mode ==
+            config.BUILD_MODES.REPLACE
+
+            or
+
+            mode ==
+            config.BUILD_MODES.CLEAR
+        )
+        and
+        turtle.getItemCount(
+            config.RESERVED_SLOT
+        )
+        ~= 0
+    then
+
+        return false,
+            "SLOT_16_OCUPADO_AL_SALIR"
+
+    end
+
+    -- ========================================================
+    -- NUEVA TANDA
     -- ========================================================
 
     state.resetBatchCounter()
 
     state.save()
 
+    print("")
+    print("==============================")
+    print("       SERVICIO COMPLETO")
+    print("==============================")
+
+    if
+        mode ==
+        config.BUILD_MODES.REPLACE
+    then
+
+        print(
+            "Slot 16 listo para reemplazos."
+        )
+
+    end
+
     -- ========================================================
-    -- 6. REGRESAR
+    -- REGRESAR AL TRABAJO
     -- ========================================================
 
     if
@@ -1080,6 +1350,10 @@ function stations.fullRestock(
             )
 
         end
+
+        print(
+            "Trabajo reanudado."
+        )
 
     end
 

@@ -1,6 +1,6 @@
 -- ============================================================
 -- PAISACRAFT
--- ESTADO DEL WORKER v6.1.2
+-- ESTADO DEL WORKER v6.1.5
 -- ============================================================
 
 local config =
@@ -16,39 +16,48 @@ local state = {}
 -- ============================================================
 
 state.assignment = nil
+
 state.currentIndex = nil
+
 state.completed = 0
 
 state.home = nil
 
 state.paused = false
+
 state.returnRequested = false
 
 state.initialRestockDone = false
 
--- Cantidad de bloques que realmente han sido
--- colocados/reemplazados/eliminados desde el último servicio.
+-- Cantidad de bloques realmente procesados
+-- desde el ultimo ciclo de servicio.
 state.blocksThisBatch = 0
 
 -- ============================================================
 -- DATOS TEMPORALES
+--
+-- No se guardan en disco porque se reconstruyen
+-- mediante GPS/orientacion al arrancar.
 -- ============================================================
 
 state.direction = nil
 
 state.position = {
+
     x = nil,
     y = nil,
     z = nil
+
 }
 
 state.buildingSlot = nil
 
 state.movementsSinceGPS = 0
+
 state.blocksSinceSave = 0
 
 -- ============================================================
--- POSICIÓN
+-- POSICION
 -- ============================================================
 
 function state.hasPosition()
@@ -63,7 +72,11 @@ function state.hasPosition()
 end
 
 
-function state.setPosition(x, y, z)
+function state.setPosition(
+    x,
+    y,
+    z
+)
 
     state.position.x = x
     state.position.y = y
@@ -75,13 +88,22 @@ end
 function state.getPosition()
 
     if not state.hasPosition() then
+
         return nil
+
     end
 
     return {
-        x = state.position.x,
-        y = state.position.y,
-        z = state.position.z
+
+        x =
+            state.position.x,
+
+        y =
+            state.position.y,
+
+        z =
+            state.position.z
+
     }
 
 end
@@ -96,26 +118,31 @@ function state.clearPosition()
 end
 
 -- ============================================================
--- DIRECCIÓN
+-- DIRECCION
 -- ============================================================
 
-function state.setDirection(direction)
+function state.setDirection(
+    direction
+)
 
     if
         direction ~= nil
         and
-        not utils.isValidDirection(direction)
+        not utils.isValidDirection(
+            direction
+        )
     then
 
         error(
-            "Dirección inválida: "
+            "Direccion invalida: "
             ..
             tostring(direction)
         )
 
     end
 
-    state.direction = direction
+    state.direction =
+        direction
 
 end
 
@@ -143,9 +170,17 @@ function state.setHome(
         y = y,
         z = z,
 
-        direction = direction
+        direction =
+            direction
 
     }
+
+end
+
+
+function state.getHome()
+
+    return state.home
 
 end
 
@@ -162,7 +197,7 @@ function state.hasHome()
 end
 
 -- ============================================================
--- ASIGNACIÓN
+-- ASIGNACION
 -- ============================================================
 
 function state.setAssignment(
@@ -179,18 +214,37 @@ function state.setAssignment(
 
     else
 
-        state.currentIndex = nil
+        state.currentIndex =
+            nil
 
     end
 
     state.completed = 0
 
-    state.initialRestockDone = false
+    state.initialRestockDone =
+        false
 
-    state.blocksThisBatch = 0
+    state.blocksThisBatch =
+        0
 
-    state.paused = false
-    state.returnRequested = false
+    state.paused =
+        false
+
+    state.returnRequested =
+        false
+
+    state.buildingSlot =
+        nil
+
+    state.blocksSinceSave =
+        0
+
+end
+
+
+function state.getAssignment()
+
+    return state.assignment
 
 end
 
@@ -198,26 +252,38 @@ end
 function state.hasAssignment()
 
     return
-        state.assignment ~= nil
+        state.assignment
+        ~=
+        nil
 
 end
 
+-- ============================================================
+-- TRABAJO ACTIVO
+-- ============================================================
 
 function state.hasActiveJob()
 
     if not state.assignment then
+
         return false
+
     end
 
     if state.currentIndex == nil then
+
         return false
+
     end
 
     if
         state.assignment.endIndex
-        == nil
+        ==
+        nil
     then
+
         return false
+
     end
 
     return
@@ -228,11 +294,50 @@ function state.hasActiveJob()
 end
 
 -- ============================================================
--- TRABAJO TERMINADO PERO REGRESO PENDIENTE
+-- TRABAJO TERMINADO
+-- ============================================================
+
+function state.isJobFinished()
+
+    if not state.assignment then
+
+        return false
+
+    end
+
+    if state.currentIndex == nil then
+
+        return false
+
+    end
+
+    if
+        state.assignment.endIndex
+        ==
+        nil
+    then
+
+        return false
+
+    end
+
+    return
+        state.currentIndex
+        >
+        state.assignment.endIndex
+
+end
+
+-- ============================================================
+-- RETORNO PENDIENTE
 --
--- Esto nos servirá posteriormente en worker.lua:
--- si reinicia después de terminar pero antes de aparcar,
--- sabremos que debe volver HOME.
+-- Permite recuperar el caso:
+--
+-- termina trabajo
+-- -> solicita HOME
+-- -> servidor/turtle reinicia
+-- -> worker vuelve a arrancar
+-- -> sigue sabiendo que debe regresar HOME
 -- ============================================================
 
 function state.hasPendingReturn()
@@ -247,12 +352,79 @@ function state.hasPendingReturn()
 end
 
 -- ============================================================
+-- PROGRESO
+-- ============================================================
+
+function state.incrementCompleted()
+
+    state.completed =
+        state.completed
+        +
+        1
+
+end
+
+
+function state.advanceIndex()
+
+    if state.currentIndex == nil then
+
+        return false
+
+    end
+
+    state.currentIndex =
+        state.currentIndex
+        +
+        1
+
+    return true
+
+end
+
+-- ============================================================
 -- TANDA
 -- ============================================================
 
 function state.resetBatchCounter()
 
-    state.blocksThisBatch = 0
+    state.blocksThisBatch =
+        0
+
+end
+
+
+function state.incrementBatchCounter()
+
+    state.blocksThisBatch =
+        state.blocksThisBatch
+        +
+        1
+
+end
+
+
+function state.getBatchCount()
+
+    return
+        state.blocksThisBatch
+        or
+        0
+
+end
+
+
+function state.getBatchRemaining()
+
+    return math.max(
+
+        0,
+
+        config.BATCH_BLOCK_LIMIT
+        -
+        state.getBatchCount()
+
+    )
 
 end
 
@@ -260,7 +432,7 @@ end
 function state.batchLimitReached()
 
     return
-        state.blocksThisBatch
+        state.getBatchCount()
         >=
         config.BATCH_BLOCK_LIMIT
 
@@ -272,45 +444,106 @@ end
 
 function state.pause()
 
-    state.paused = true
+    state.paused =
+        true
 
 end
 
 
 function state.resume()
 
-    state.paused = false
+    state.paused =
+        false
 
 end
 
 
+function state.isPaused()
+
+    return
+        state.paused
+        ==
+        true
+
+end
+
+-- ============================================================
+-- RETORNO
+-- ============================================================
+
 function state.requestReturn()
 
-    state.returnRequested = true
+    state.returnRequested =
+        true
 
 end
 
 
 function state.cancelReturn()
 
-    state.returnRequested = false
+    state.returnRequested =
+        false
+
+end
+
+
+function state.isReturnRequested()
+
+    return
+        state.returnRequested
+        ==
+        true
 
 end
 
 -- ============================================================
--- SLOT DE CONSTRUCCIÓN
+-- SLOT DE CONSTRUCCION
 -- ============================================================
 
-function state.setBuildingSlot(slot)
+function state.setBuildingSlot(
+    slot
+)
 
-    state.buildingSlot = slot
+    if
+        slot ~= nil
+        and
+        (
+            slot
+            <
+            config.BUILD_SLOT_FIRST
+
+            or
+
+            slot
+            >
+            config.BUILD_SLOT_LAST
+        )
+    then
+
+        return false
+
+    end
+
+    state.buildingSlot =
+        slot
+
+    return true
+
+end
+
+
+function state.getBuildingSlot()
+
+    return
+        state.buildingSlot
 
 end
 
 
 function state.clearBuildingSlot()
 
-    state.buildingSlot = nil
+    state.buildingSlot =
+        nil
 
 end
 
@@ -321,14 +554,17 @@ end
 function state.movementPerformed()
 
     state.movementsSinceGPS =
-        state.movementsSinceGPS + 1
+        state.movementsSinceGPS
+        +
+        1
 
 end
 
 
 function state.resetGPSCounter()
 
-    state.movementsSinceGPS = 0
+    state.movementsSinceGPS =
+        0
 
 end
 
@@ -343,12 +579,159 @@ function state.needsGPSSync()
 end
 
 -- ============================================================
+-- GUARDADO PERIODICO
+-- ============================================================
+
+function state.blockProcessed()
+
+    state.blocksSinceSave =
+        state.blocksSinceSave
+        +
+        1
+
+end
+
+-- ============================================================
+-- VALIDAR ASIGNACION
+-- ============================================================
+
+local function validAssignment(
+    assignment
+)
+
+    if assignment == nil then
+
+        return true
+
+    end
+
+    if
+        type(assignment)
+        ~=
+        "table"
+    then
+
+        return false
+
+    end
+
+    if
+        type(assignment.startIndex)
+        ~=
+        "number"
+    then
+
+        return false
+
+    end
+
+    if
+        type(assignment.endIndex)
+        ~=
+        "number"
+    then
+
+        return false
+
+    end
+
+    if
+        assignment.endIndex
+        <
+        assignment.startIndex
+    then
+
+        return false
+
+    end
+
+    return true
+
+end
+
+-- ============================================================
+-- NORMALIZAR DATOS CARGADOS
+-- ============================================================
+
+local function normalizeLoadedState()
+
+    if
+        state.completed
+        <
+        0
+    then
+
+        state.completed =
+            0
+
+    end
+
+    if
+        state.blocksThisBatch
+        <
+        0
+    then
+
+        state.blocksThisBatch =
+            0
+
+    end
+
+    if
+        state.blocksThisBatch
+        >
+        config.BATCH_BLOCK_LIMIT
+    then
+
+        -- Si la turtle se apago justo despues
+        -- de completar una tanda, conservamos
+        -- como maximo el limite.
+        state.blocksThisBatch =
+            config.BATCH_BLOCK_LIMIT
+
+    end
+
+    if state.assignment then
+
+        if
+            state.currentIndex
+            ==
+            nil
+        then
+
+            state.currentIndex =
+                state.assignment.startIndex
+
+        end
+
+        if
+            state.currentIndex
+            <
+            state.assignment.startIndex
+        then
+
+            state.currentIndex =
+                state.assignment.startIndex
+
+        end
+
+    end
+
+end
+
+-- ============================================================
 -- SERIALIZAR
+--
+-- Solo guardamos datos que deben sobrevivir
+-- a un reboot.
 -- ============================================================
 
 function state.toTable()
 
     return {
+
+        version =
+            config.VERSION,
 
         assignment =
             state.assignment,
@@ -382,10 +765,30 @@ end
 -- RESTAURAR
 -- ============================================================
 
-function state.fromTable(data)
+function state.fromTable(
+    data
+)
 
-    if type(data) ~= "table" then
-        return false
+    if
+        type(data)
+        ~=
+        "table"
+    then
+
+        return false,
+            "STATE_INVALIDO"
+
+    end
+
+    if
+        not validAssignment(
+            data.assignment
+        )
+    then
+
+        return false,
+            "ASIGNACION_GUARDADA_INVALIDA"
+
     end
 
     state.assignment =
@@ -395,7 +798,9 @@ function state.fromTable(data)
         data.currentIndex
 
     state.completed =
-        data.completed
+        tonumber(
+            data.completed
+        )
         or
         0
 
@@ -404,25 +809,47 @@ function state.fromTable(data)
 
     state.paused =
         data.paused
-        or
-        false
+        ==
+        true
 
     state.returnRequested =
         data.returnRequested
-        or
-        false
+        ==
+        true
 
     state.initialRestockDone =
         data.initialRestockDone
-        or
-        false
+        ==
+        true
 
     state.blocksThisBatch =
-        data.blocksThisBatch
+        tonumber(
+            data.blocksThisBatch
+        )
         or
         0
 
-    state.blocksSinceSave = 0
+    -- ========================================================
+    -- DATOS TEMPORALES
+    --
+    -- Siempre se reconstruyen tras reboot.
+    -- ========================================================
+
+    state.direction =
+        nil
+
+    state.clearPosition()
+
+    state.buildingSlot =
+        nil
+
+    state.movementsSinceGPS =
+        0
+
+    state.blocksSinceSave =
+        0
+
+    normalizeLoadedState()
 
     return true
 
@@ -434,7 +861,8 @@ end
 
 function state.save()
 
-    local ok, err =
+    local ok,
+        err =
         utils.saveTable(
 
             config.WORKER_STATE_FILE,
@@ -450,18 +878,20 @@ function state.save()
             tostring(err)
         )
 
-        return false
+        return false,
+            err
 
     end
 
-    state.blocksSinceSave = 0
+    state.blocksSinceSave =
+        0
 
     return true
 
 end
 
 -- ============================================================
--- GUARDADO PERIÓDICO
+-- GUARDAR SI CORRESPONDE
 -- ============================================================
 
 function state.saveIfNeeded()
@@ -492,42 +922,83 @@ function state.load()
         )
 
     if not data then
-        return false
+
+        return false,
+            "SIN_ESTADO_GUARDADO"
+
     end
 
-    return state.fromTable(
-        data
-    )
+    local ok,
+        err =
+        state.fromTable(
+            data
+        )
+
+    if not ok then
+
+        print("")
+        print(
+            "Estado guardado invalido:"
+        )
+
+        print(
+            tostring(err)
+        )
+
+        return false,
+            err
+
+    end
+
+    return true
 
 end
 
 -- ============================================================
 -- LIMPIAR TRABAJO
+--
+-- Elimina completamente la asignacion actual.
 -- ============================================================
 
 function state.clearJob()
 
-    state.assignment = nil
-    state.currentIndex = nil
+    state.assignment =
+        nil
 
-    state.completed = 0
+    state.currentIndex =
+        nil
 
-    state.home = nil
+    state.completed =
+        0
 
-    state.paused = false
-    state.returnRequested = false
+    state.home =
+        nil
 
-    state.initialRestockDone = false
+    state.paused =
+        false
 
-    state.direction = nil
+    state.returnRequested =
+        false
+
+    state.initialRestockDone =
+        false
+
+    state.direction =
+        nil
 
     state.clearPosition()
 
-    state.buildingSlot = nil
+    state.buildingSlot =
+        nil
 
-    state.movementsSinceGPS = 0
-    state.blocksSinceSave = 0
-    state.blocksThisBatch = 0
+    state.movementsSinceGPS =
+        0
+
+    state.blocksSinceSave =
+        0
+
+    state.blocksThisBatch =
+        0
 
     return state.save()
 
@@ -535,18 +1006,114 @@ end
 
 -- ============================================================
 -- REINICIAR ESTADO TEMPORAL
+--
+-- Se utiliza al arrancar despues de un reboot.
+--
+-- NO toca:
+--
+-- assignment
+-- currentIndex
+-- completed
+-- home
+-- blocksThisBatch
+-- initialRestockDone
+-- returnRequested
 -- ============================================================
 
 function state.resetRuntime()
 
-    state.direction = nil
+    state.direction =
+        nil
 
     state.clearPosition()
 
-    state.buildingSlot = nil
+    state.buildingSlot =
+        nil
 
-    state.movementsSinceGPS = 0
-    state.blocksSinceSave = 0
+    state.movementsSinceGPS =
+        0
+
+    state.blocksSinceSave =
+        0
+
+end
+
+-- ============================================================
+-- ESTADISTICAS
+-- ============================================================
+
+function state.getStats()
+
+    local remaining = 0
+
+    if
+        state.assignment
+        and
+        state.currentIndex
+        and
+        state.assignment.endIndex
+    then
+
+        remaining =
+            math.max(
+
+                0,
+
+                state.assignment.endIndex
+                -
+                state.currentIndex
+                +
+                1
+
+            )
+
+    end
+
+    return {
+
+        hasAssignment =
+            state.hasAssignment(),
+
+        activeJob =
+            state.hasActiveJob(),
+
+        finishedJob =
+            state.isJobFinished(),
+
+        currentIndex =
+            state.currentIndex,
+
+        completed =
+            state.completed,
+
+        remaining =
+            remaining,
+
+        blocksThisBatch =
+            state.blocksThisBatch,
+
+        batchRemaining =
+            state.getBatchRemaining(),
+
+        paused =
+            state.paused,
+
+        returnRequested =
+            state.returnRequested,
+
+        initialRestockDone =
+            state.initialRestockDone,
+
+        home =
+            state.home,
+
+        position =
+            state.getPosition(),
+
+        direction =
+            state.direction
+
+    }
 
 end
 

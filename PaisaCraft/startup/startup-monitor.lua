@@ -3,6 +3,9 @@
 -- STARTUP MONITOR
 -- ============================================================
 
+local MONITOR =
+    "/PaisaCraft/monitor.lua"
+
 term.clear()
 term.setCursorPos(1, 1)
 
@@ -15,26 +18,50 @@ print("Iniciando monitor...")
 
 sleep(1)
 
-if not fs.exists("monitor.lua") then
+-- ============================================================
+-- COMPROBAR MONITOR
+-- ============================================================
+
+if not fs.exists(MONITOR) then
 
     print("")
-    print("ERROR:")
+    print("==============================")
+    print("           ERROR")
+    print("==============================")
+
+    print("")
     print("monitor.lua no existe.")
+
+    print("")
+    print("Ruta esperada:")
+
+    print(
+        MONITOR
+    )
 
     return
 
 end
 
-local ok, err =
+-- ============================================================
+-- EJECUTAR MONITOR
+-- ============================================================
+
+local ok,
+    err =
     pcall(
         function()
 
             shell.run(
-                "monitor.lua"
+                MONITOR
             )
 
         end
     )
+
+-- ============================================================
+-- ERROR
+-- ============================================================
 
 if not ok then
 
@@ -44,8 +71,11 @@ if not ok then
     print("==============================")
 
     print("")
+
     print(
-        tostring(err)
+        tostring(
+            err
+        )
     )
 
     print("")

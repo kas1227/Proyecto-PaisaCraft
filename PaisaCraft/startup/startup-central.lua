@@ -3,6 +3,9 @@
 -- STARTUP CENTRAL
 -- ============================================================
 
+local CENTRAL =
+    "/PaisaCraft/central.lua"
+
 term.clear()
 term.setCursorPos(1, 1)
 
@@ -15,26 +18,50 @@ print("Iniciando central...")
 
 sleep(1)
 
-if not fs.exists("central.lua") then
+-- ============================================================
+-- COMPROBAR CENTRAL
+-- ============================================================
+
+if not fs.exists(CENTRAL) then
 
     print("")
-    print("ERROR:")
+    print("==============================")
+    print("           ERROR")
+    print("==============================")
+
+    print("")
     print("central.lua no existe.")
+
+    print("")
+    print("Ruta esperada:")
+
+    print(
+        CENTRAL
+    )
 
     return
 
 end
 
-local ok, err =
+-- ============================================================
+-- EJECUTAR CENTRAL
+-- ============================================================
+
+local ok,
+    err =
     pcall(
         function()
 
             shell.run(
-                "central.lua"
+                CENTRAL
             )
 
         end
     )
+
+-- ============================================================
+-- ERROR
+-- ============================================================
 
 if not ok then
 
@@ -44,8 +71,11 @@ if not ok then
     print("==============================")
 
     print("")
+
     print(
-        tostring(err)
+        tostring(
+            err
+        )
     )
 
     print("")

@@ -1,6 +1,6 @@
 -- ============================================================
 -- PAISACRAFT
--- CENTRAL v6.1.4
+-- CENTRAL v6.1.5
 --
 -- - 3 estaciones con cola exclusiva
 -- - Heartbeat / workers offline
@@ -10,11 +10,23 @@
 -- - Asignación por proximidad
 -- ============================================================
 
+-- ============================================================
+-- RUTAS
+-- ============================================================
+
+package.path =
+    package.path
+    .. ";/PaisaCraft/?.lua"
+    .. ";/PaisaCraft/?/init.lua"
+
 local config =
     require("lib.config")
 
 local protocol =
     require("lib.protocol")
+
+local utils =
+    require("lib.utils")
 
 -- ============================================================
 -- ESTADO
@@ -31,6 +43,26 @@ local unloadQueue = {}
 local materialOwner = nil
 local fuelOwner = nil
 local unloadOwner = nil
+
+-- ============================================================
+-- GEOMETRIA DE LA CENTRAL
+-- ============================================================
+
+local CENTRAL_CONFIG_FILE =
+    config.CENTRAL_CONFIG_FILE
+    or
+    "/PaisaCraft/data/central.cfg"
+
+local centralPosition = nil
+local centralDirection = nil
+local serviceStations = nil
+
+local DIRECTION = {
+    NORTH = 0,
+    EAST = 1,
+    SOUTH = 2,
+    WEST = 3
+}
 
 -- ============================================================
 -- TIEMPO
@@ -1145,28 +1177,354 @@ local function askNumber(text)
 end
 
 -- ============================================================
--- POSICIÓN OBLIGATORIA
+-- INPUT X Z EN UNA SOLA LINEA
 -- ============================================================
 
-local function askRequiredPosition(
-    title
+local function askXZ(text)
+
+    while true do
+
+        write(text)
+
+        local line =
+            read()
+
+        local values = {}
+
+        for number
+            in string.gmatch(
+                line,
+                "[-+]?%d+"
+            )
+        do
+
+            table.insert(
+                values,
+                tonumber(number)
+            )
+
+        end
+
+        if #values >= 2 then
+
+            return
+                math.floor(values[1]),
+                math.floor(values[2])
+
+        end
+
+        print(
+            "Formato invalido. Ejemplo: -832 -1200"
+        )
+
+    end
+
+end
+
+-- ============================================================
+-- NOMBRE DE DIRECCION
+-- ============================================================
+
+local function directionName(direction)
+
+    if direction == DIRECTION.NORTH then
+        return "NORTE"
+    elseif direction == DIRECTION.EAST then
+        return "ESTE"
+    elseif direction == DIRECTION.SOUTH then
+        return "SUR"
+    elseif direction == DIRECTION.WEST then
+        return "OESTE"
+    end
+
+    return "DESCONOCIDA"
+
+end
+
+-- ============================================================
+-- PEDIR ORIENTACION DE LA CENTRAL
+--
+-- Solo se pregunta la primera vez. Se guarda en central.cfg.
+-- ============================================================
+
+local function askCentralDirection()
+
+    while true do
+
+        print("")
+        print("==============================")
+        print("   ORIENTACION DE LA CENTRAL")
+        print("==============================")
+        print("")
+        print("Indica hacia donde mira el frente")
+        print("del Advanced Computer:")
+        print("")
+        print("1. Norte  (-Z)")
+        print("2. Este   (+X)")
+        print("3. Sur    (+Z)")
+        print("4. Oeste  (-X)")
+        print("")
+        write("> ")
+
+        local option =
+            read()
+
+        if option == "1" then
+            return DIRECTION.NORTH
+        elseif option == "2" then
+            return DIRECTION.EAST
+        elseif option == "3" then
+            return DIRECTION.SOUTH
+        elseif option == "4" then
+            return DIRECTION.WEST
+        end
+
+        print("")
+        print("Opcion invalida.")
+
+    end
+
+end
+
+-- ============================================================
+-- CARGAR / GUARDAR ORIENTACION
+-- ============================================================
+
+local function loadCentralDirection()
+
+    local saved =
+        utils.loadTable(
+            CENTRAL_CONFIG_FILE
+        )
+
+    if
+        type(saved) == "table"
+        and
+        type(saved.direction) == "number"
+        and
+        saved.direction >= 0
+        and
+        saved.direction <= 3
+    then
+
+        return saved.direction
+
+    end
+
+    return nil
+
+end
+
+local function saveCentralDirection(direction)
+
+    utils.ensureDirectory(
+        config.DATA_DIR
+        or
+        "/PaisaCraft/data"
+    )
+
+    return utils.saveTable(
+        CENTRAL_CONFIG_FILE,
+        {
+            direction = direction
+        }
+    )
+
+end
+
+-- ============================================================
+-- POSICION GPS DE LA CENTRAL
+-- ============================================================
+
+local function locateCentral()
+
+    local x, y, z =
+        gps.locate(
+            config.GPS_TIMEOUT
+            or
+            5
+        )
+
+    if not x then
+
+        return nil,
+            "GPS_NO_DISPONIBLE_EN_CENTRAL"
+
+    end
+
+    return {
+        x = utils.round(x),
+        y = utils.round(y),
+        z = utils.round(z)
+    }
+
+end
+
+-- ============================================================
+-- CALCULAR ESTACIONES
+--
+-- Convencion fisica:
+-- izquierda = materiales
+-- derecha   = combustible
+-- atras     = descarga
+--
+-- Los bloques de la Central y de las estaciones estan un
+-- nivel por encima de las turtles. Por eso serviceY = Y - 1.
+-- ============================================================
+
+local function calculateStations(
+    position,
+    direction
 )
 
-    print("")
-    print(title)
+    local frontX = 0
+    local frontZ = 0
+
+    if direction == DIRECTION.NORTH then
+        frontZ = -1
+    elseif direction == DIRECTION.EAST then
+        frontX = 1
+    elseif direction == DIRECTION.SOUTH then
+        frontZ = 1
+    elseif direction == DIRECTION.WEST then
+        frontX = -1
+    else
+        return nil,
+            "ORIENTACION_CENTRAL_INVALIDA"
+    end
+
+    local leftX = frontZ
+    local leftZ = -frontX
+
+    local rightX = -frontZ
+    local rightZ = frontX
+
+    local backX = -frontX
+    local backZ = -frontZ
+
+    local serviceY =
+        position.y - 1
 
     return {
 
-        x =
-            askNumber("X: "),
+        material = {
+            x = position.x + leftX,
+            y = serviceY,
+            z = position.z + leftZ
+        },
 
-        y =
-            askNumber("Y: "),
+        fuel = {
+            x = position.x + rightX,
+            y = serviceY,
+            z = position.z + rightZ
+        },
 
-        z =
-            askNumber("Z: ")
+        unload = {
+            x = position.x + backX,
+            y = serviceY,
+            z = position.z + backZ
+        }
 
     }
+
+end
+
+-- ============================================================
+-- INICIALIZAR GEOMETRIA DE LA CENTRAL
+-- ============================================================
+
+local function initializeCentralGeometry()
+
+    local position,
+        positionError =
+        locateCentral()
+
+    if not position then
+
+        return false,
+            positionError
+
+    end
+
+    local direction =
+        loadCentralDirection()
+
+    if direction == nil then
+
+        direction =
+            askCentralDirection()
+
+        local saved,
+            saveError =
+            saveCentralDirection(
+                direction
+            )
+
+        if not saved then
+
+            return false,
+                saveError
+                or
+                "NO_SE_PUDO_GUARDAR_ORIENTACION"
+
+        end
+
+    end
+
+    local stations,
+        stationError =
+        calculateStations(
+            position,
+            direction
+        )
+
+    if not stations then
+
+        return false,
+            stationError
+
+    end
+
+    centralPosition = position
+    centralDirection = direction
+    serviceStations = stations
+
+    print("")
+    print("==============================")
+    print("       CENTRAL LOCALIZADA")
+    print("==============================")
+    print("")
+    print(
+        "Central:",
+        position.x,
+        position.y,
+        position.z
+    )
+    print(
+        "Frente:",
+        directionName(direction)
+    )
+    print("")
+    print(
+        "Material:",
+        stations.material.x,
+        stations.material.y,
+        stations.material.z
+    )
+    print(
+        "Fuel:",
+        stations.fuel.x,
+        stations.fuel.y,
+        stations.fuel.z
+    )
+    print(
+        "Descarga:",
+        stations.unload.x,
+        stations.unload.y,
+        stations.unload.z
+    )
+
+    return true
 
 end
 
@@ -1764,24 +2122,23 @@ local function createJob()
     print("       NUEVO TRABAJO")
     print("==============================")
 
-    local x1 =
-        askNumber(
-            "X esquina 1: "
+    print("")
+    print(
+        "Introduce X y Z juntas."
+    )
+    print(
+        "Ejemplo: -832 -1200"
+    )
+    print("")
+
+    local x1, z1 =
+        askXZ(
+            "Esquina 1 (X Z): "
         )
 
-    local z1 =
-        askNumber(
-            "Z esquina 1: "
-        )
-
-    local x2 =
-        askNumber(
-            "X esquina 2: "
-        )
-
-    local z2 =
-        askNumber(
-            "Z esquina 2: "
+    local x2, z2 =
+        askXZ(
+            "Esquina 2 (X Z): "
         )
 
     local floorY =
@@ -1836,47 +2193,37 @@ local function createJob()
         )
 
     -- ========================================================
-    -- ESTACIONES
+    -- ESTACIONES AUTOMATICAS
+    --
+    -- Las tres posiciones se calculan una sola vez a partir
+    -- del Advanced Computer Central:
+    --
+    -- izquierda = materiales
+    -- derecha   = combustible
+    -- atras     = descarga
     -- ========================================================
 
-    local materialStation =
-        nil
+    if not serviceStations then
 
-    if
-        mode
-        ~=
-        config.BUILD_MODES.CLEAR
-    then
-
-        materialStation =
-            askRequiredPosition(
-                "ESTACION MATERIALES"
-            )
-
-    end
-
-    local fuelStation =
-        askRequiredPosition(
-            "ESTACION COMBUSTIBLE"
+        print("")
+        print(
+            "ERROR: estaciones no inicializadas."
         )
 
-    local unloadStation =
-        nil
+        sleep(2)
 
-    if
-        mode ==
-        config.BUILD_MODES.REPLACE
-        or
-        mode ==
-        config.BUILD_MODES.CLEAR
-    then
-
-        unloadStation =
-            askRequiredPosition(
-                "ESTACION DESCARGA"
-            )
+        return
 
     end
+
+    local materialStation =
+        serviceStations.material
+
+    local fuelStation =
+        serviceStations.fuel
+
+    local unloadStation =
+        serviceStations.unload
 
     local job = {
 
@@ -1960,6 +2307,26 @@ local function createJob()
     print(
         "Modo:",
         mode
+    )
+
+    print("")
+    print(
+        "Material:",
+        materialStation.x,
+        materialStation.y,
+        materialStation.z
+    )
+    print(
+        "Fuel:",
+        fuelStation.x,
+        fuelStation.y,
+        fuelStation.z
+    )
+    print(
+        "Descarga:",
+        unloadStation.x,
+        unloadStation.y,
+        unloadStation.z
     )
 
     local usableWorkers =
@@ -2330,6 +2697,20 @@ print(
 
 openModem()
 
+local geometryOK,
+    geometryError =
+    initializeCentralGeometry()
+
+if not geometryOK then
+
+    error(
+        "No se pudo inicializar la Central: "
+        ..
+        tostring(geometryError)
+    )
+
+end
+
 hostNetwork()
 
 print("")
@@ -2348,6 +2729,11 @@ parallel.waitForAny(
 pcall(
     rednet.unhost,
     config.PROTOCOL
+)
+
+print("")
+print(
+    "Central detenida."
 )
 
 print("")
